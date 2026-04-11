@@ -25,6 +25,9 @@
       (Press "&lt;" to decrease, and "&gt;" to increase)
    </div>
    <component :is="current_notation" :subitems="datasets[current_tab]"></component>
+   <div class="floating-canvas" id="floatingCanvas" :style="{ left: xCanvas + 'px', top: yCanvas + 'px' }" v-show="showCanvas">
+      <canvas id="hoverCanvas" width="10" height="10"></canvas>
+   </div>
 </div>
 <script src="omega-Y.js"></script>
 <script src="omega-Y-magma.js"></script>

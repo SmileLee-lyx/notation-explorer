@@ -13,6 +13,11 @@
       ,extra_FS:register.map(()=>0)
       ,tier:register.map(()=>1)
       ,datasets:register.map(notation=>notation.init())
+      ,xCanvas:0
+      ,yCanvas:0
+      ,wCanvas:100
+      ,hCanvas:100
+      ,showCanvas:false
    })
    ,computed:{
       current_notation(){return register[this.current_tab].id}
@@ -47,6 +52,7 @@
       }
    }
 })
+
 register.forEach((notation,index)=>{
    app.component(notation.id+'-list',{
       props:['expr','low','subitems']
@@ -60,9 +66,19 @@ register.forEach((notation,index)=>{
          ,shownFS:[]
          ,tooltip:false
          ,tooltipX:{}
+         ,drawDiagram:notation.drawDiagram || null
       })
       ,methods:{
          recalculate(event){
+            if(this.drawDiagram !== null) {
+               const elem = document.getElementById('hoverCanvas');
+               this.drawDiagram(elem, this.expr)
+
+               root.showCanvas = true
+               root.xCanvas = event.clientX + 100
+               root.yCanvas = event.clientY + 15
+            }
+
             if(!this.able(this.expr)) return;
             var FS = event.shiftKey&&this.FSalter?this.FSalter:this.FS
             var res=[]
@@ -72,7 +88,13 @@ register.forEach((notation,index)=>{
             this.tooltipX = {left:(event.offsetX+15)+'px'}
             this.tooltip = true
          }
+         ,follow(event) {
+            root.xCanvas = event.clientX + 100
+            root.yCanvas = event.clientY + 15
+         }
          ,unshow(){
+            root.showCanvas = false
+
             if(!this.able(this.expr)) return;
             this.tooltip = false
          }
@@ -110,8 +132,11 @@ register.forEach((notation,index)=>{
             extras.forEach(expand_extra)
          }
       }
-      ,template:`<li><div class="shown-item" @mouseenter="recalculate" @mouseleave="unshow()" @mousedown="expand"><span v-html="display(expr)"></span>
+      ,template:`<li><div class="shown-item" @mouseenter="recalculate" @mousemove="follow" @mouseleave="unshow()" @mousedown="expand"><span v-html="display(expr)"></span>
             <div class="tooltip" v-if="tooltip" :style="tooltipX" @mousedown.stop>
+            <div class="floating-canvas" v-if="tooltip" id="floatingCanvas" :style="tooltipX" @mousedown.stop>
+               <canvas id="hoverCanvas" width="300" height="250" ></canvas>
+            </div>
             <span v-html="display(expr)"></span> fundamental sequence:
             <div v-for="term in shownFS" v-html="term"></div>
          </div></div>

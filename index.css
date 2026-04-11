@@ -27,3 +27,7 @@
 .nowrap{
    white-space: nowrap;
 }
+.floating-canvas {
+   position: fixed;
+   pointer-events: none;
+}
