@@ -42,6 +42,7 @@
    }
    ,isLimit = expr=>{
       if(''+expr==='Infinity') return true
+      if (expr.length === 0) return false
       var active = expr[expr.length-1]
       if(!(active[1+active[0]]?.[0])) return false
       return pleasantUntil(expr.slice(active[1+active[0]][0]-1,-1),active)===-1
@@ -193,8 +194,6 @@
       ctx.fillRect(0, 0, elem.width, elem.height);
       ctx.strokeStyle="black"
       ctx.strokeRect(0, 0, elem.width, elem.height);
-
-      console.log(expr)
 
       for (let i = 0; i < expr.length; ++i) {
          let row = expr[i]

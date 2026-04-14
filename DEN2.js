@@ -23,8 +23,47 @@
          }
       }
    }
-   ,compare = (expr1,expr2)=>seqseq_compare(toShort(expr1),toShort(expr2))
+   ,compare = (expr1,expr2)=>{
+      if (''+expr1 === 'Infinity' && ''+expr2 === 'Infinity') return 0
+      if (''+expr1 === 'Infinity') return 1
+      if (''+expr2 === 'Infinity') return -1
+      return seqseq_compare(toShort(expr1),toShort(expr2))
+   }
    ,display = expr=>''+expr==='Infinity'?'Limit':expr.map(row=>'('+row.slice(1).map(x=>(x[1]?'*':'')+x[0]).join(',')+')'+row[0]).join('')
+   ,fromDisplay = (str) => {
+      if (str === 'Limit') return Infinity
+
+      const result = [];
+      // 正则匹配每一组：以 ( 开头，中间是数字（可能带*）和逗号，然后是 )数字
+      const groupRegex = /\(([^)]+)\)(\d+)/g;
+      let match;
+
+      while ((match = groupRegex.exec(str)) !== null) {
+         const inner = match[1];   // 括号内部分，如 "1,2,*3" 或 "4" 或 "1,2"
+         const lengthVal = parseInt(match[2], 10);  // 最后的 L 整数
+
+         // 解析括号内的数字及星号标记
+         const parts = inner.split(',');
+         /**
+          * @type {(number | [number, boolean])[]}
+          */
+         const values = [lengthVal];
+
+         for (const part of parts) {
+            const hasStar = part.startsWith('*');
+            const numStr = hasStar ? part.slice(1) : part;
+            const num = parseInt(numStr, 10);
+            if (isNaN(num)) {
+               throw new Error(`无效数字: "${part}"`);
+            }
+            values.push([num, hasStar]);
+         }
+
+         result.push(values);
+      }
+
+      return result;
+   }
    ,values = row=>[row[0]].concat(row.slice(1).map(x=>x[0]))
    ,isNonzero = expr=> expr.length>0
    ,pleasantUntil = (rows,t)=>{
@@ -42,6 +81,7 @@
    }
    ,isLimit = expr=>{
       if(''+expr==='Infinity') return true
+      if (expr.length === 0) return false
       var active = expr[expr.length-1]
       if(!(active[1+active[0]]?.[0])) return false
       return pleasantUntil(expr.slice(active[1+active[0]][0]-1,-1),active)===-1
@@ -168,21 +208,25 @@
       if (''+expr==='Infinity') {
          elem.width = 10
          elem.height = 10
+         elem.style.width = "10px"
+         elem.style.height = "10px"
          return
       }
 
-      elem.width = expr.length * 20 + 40
-      elem.height = expr.length * 20
+      elem.width = expr.length * 200 + 400
+      elem.height = expr.length * 200
+      elem.style.width = (elem.width / 10) + "px"
+      elem.style.height = (elem.height / 10) + "px"
 
       const ctx = elem.getContext("2d")
+
+      ctx.lineWidth = 15
 
       ctx.clearRect(0, 0, elem.width, elem.height);
       ctx.fillStyle="white"
       ctx.fillRect(0, 0, elem.width, elem.height);
       ctx.strokeStyle="black"
       ctx.strokeRect(0, 0, elem.width, elem.height);
-
-      console.log(expr)
 
       for (let i = 0; i < expr.length; ++i) {
          let row = expr[i]
@@ -194,7 +238,7 @@
             let mark = row[j][1];
 
             ctx.beginPath()
-            ctx.arc(pos * 20 + 10, i * 20 + 10, 5, 0, 2 * Math.PI)
+            ctx.arc(pos * 200 + 100, i * 200 + 100, 50, 0, 2 * Math.PI)
             ctx.fillStyle = mark ? "black" : "white"
             ctx.fill()
             ctx.strokeStyle = "black"
@@ -202,8 +246,8 @@
 
             if (prev !== undefined) {
                ctx.beginPath()
-               ctx.moveTo(pos * 20 + 15, i * 20 + 10)
-               ctx.lineTo(prev * 20 + 5, i * 20 + 10)
+               ctx.moveTo(pos * 200 + 150, i * 200 + 100)
+               ctx.lineTo(prev * 200 + 50, i * 200 + 100)
                ctx.strokeStyle = "black"
                ctx.stroke()
             }
@@ -211,15 +255,16 @@
             prev = pos
          }
 
-         ctx.font = "12px Arial"
+         ctx.font = "120px Arial"
          ctx.fillStyle = "black"
-         ctx.fillText("" + row[0], i * 20 + 40, i * 20 + 15)
+         ctx.fillText("" + row[0], i * 200 + 400, i * 200 + 150)
       }
    }
    register.push({
       id:'den2'
       ,name:'DEN2'
       ,display
+      ,fromDisplay
       ,able:isLimit
       ,semiable:isNonzero
       ,compare

@@ -1,4 +1,7 @@
 ;var sequence_compare = (seq1,seq2)=>{
+   if (''+seq1 === 'Infinity' && ''+seq2 === 'Infinity') return 0
+   if (''+seq1 === 'Infinity') return 1
+   if (''+seq2 === 'Infinity') return -1
    if(seq1.length===0){
       if(seq2.length===0) return 0
       else return -1
@@ -12,6 +15,10 @@
    }
 }
 ,sequence_display = expr=>''+expr==='Infinity'?'Limit':''+expr
+,fromDisplay = (str) => {
+   if (str === 'Limit') return Infinity;
+   return str.split(',').map((s) => parseInt(s, 10))
+}
 ,Y_limit = seq=>seq[seq.length-1]>1
 ;(()=>{
    var data={}
@@ -235,6 +242,7 @@
       id:'omega-y'
       ,name:'ω-Y sequence'
       ,display:sequence_display
+      ,fromDisplay
       ,able:Y_limit
       ,compare:sequence_compare
       ,FS:(seq,FSterm)=>{

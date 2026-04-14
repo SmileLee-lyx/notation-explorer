@@ -10,8 +10,14 @@
 .shown-item{
    position: relative;
 }
+.shown-item.analyzed {
+   background-color: #eee;
+}
 .shown-item:hover{
    background-color: #cff;
+}
+.shown-item.analyzed:hover{
+   background-color: #bee;
 }
 .tab>button{
    padding: 0 6px 2px;
@@ -30,4 +36,34 @@
 .floating-canvas {
    position: fixed;
    pointer-events: none;
+}
+body::after {
+   content: "";
+   display: block;
+   height: 100vh;
+}
+
+.preview-container {
+   max-height: 400px;
+   overflow: auto;
+   border: 1px solid #ccc;
+   margin: 20px 0;
+}
+table {
+   border-collapse: collapse;
+   width: 100%;
+   font-size: 14px;
+}
+th, td {
+   border: 1px solid #ddd;
+   padding: 8px;
+   text-align: left;
+}
+th {
+   background-color: #f2f2f2;
+   position: sticky;
+   top: 0;
+}
+.selected-row {
+   background-color: #e6f7ff;
 }
