@@ -204,29 +204,26 @@
    }
    ,Limit_row = n=>Array(3+n).fill(0).map((x,nn)=>3<=nn&&nn<2+n?[nn,true]:[nn]).concat(2).reverse()
    ,Limit = n=>[[1,[1],[0]],[1,[2],[1],[0]]].concat(Array(n).fill(0).map((x,nn)=>Limit_row(1+nn)))
-   ,drawDiagram = (elem,expr) => {
+   ,drawDiagram = (expr) => {
       if (''+expr==='Infinity') {
-         elem.width = 10
-         elem.height = 10
-         elem.style.width = "10px"
-         elem.style.height = "10px"
-         return
+         return undefined
       }
 
-      elem.width = expr.length * 200 + 400
-      elem.height = expr.length * 200
-      elem.style.width = (elem.width / 10) + "px"
-      elem.style.height = (elem.height / 10) + "px"
-
-      const ctx = elem.getContext("2d")
-
-      ctx.lineWidth = 15
-
-      ctx.clearRect(0, 0, elem.width, elem.height);
-      ctx.fillStyle="white"
-      ctx.fillRect(0, 0, elem.width, elem.height);
-      ctx.strokeStyle="black"
-      ctx.strokeRect(0, 0, elem.width, elem.height);
+      let width = expr.length * 200 + 400;
+      let height = expr.length * 200 + 150;
+      let result = {
+         width: width,
+         height: height,
+         actions: [
+            { type: 'lineWidth', value: 15 },
+            { type: 'strokeStyle', value: 'black' },
+            { type: 'font', value: '120px Consolas' },
+            { type: 'fillStyle', value: 'white' },
+            { type: 'fillRect', value: { x: 0, y: 0, w: width, h: height } },
+            { type: 'strokeRect', value: { x: 0, y: 0, w: width, h: height } },
+            { type: 'fillStyle', value: 'black' },
+         ]
+      }
 
       for (let i = 0; i < expr.length; ++i) {
          let row = expr[i]
@@ -237,28 +234,41 @@
             let pos = row[j][0];
             let mark = row[j][1];
 
-            ctx.beginPath()
-            ctx.arc(pos * 200 + 100, i * 200 + 100, 50, 0, 2 * Math.PI)
-            ctx.fillStyle = mark ? "black" : "white"
-            ctx.fill()
-            ctx.strokeStyle = "black"
-            ctx.stroke()
+            result.actions.push({
+               type: 'circle',
+               center: { x: pos * 200 + 100, y: i * 200 + 100 },
+               radius: 50,
+               fill: mark
+            })
 
             if (prev !== undefined) {
-               ctx.beginPath()
-               ctx.moveTo(pos * 200 + 150, i * 200 + 100)
-               ctx.lineTo(prev * 200 + 50, i * 200 + 100)
-               ctx.strokeStyle = "black"
-               ctx.stroke()
+               result.actions.push({
+                  type: 'line',
+                  start: { x: pos * 200 + 150, y: i * 200 + 100 },
+                  end: { x: prev * 200 + 50, y: i * 200 + 100}
+               })
             }
 
             prev = pos
          }
 
-         ctx.font = "120px Arial"
-         ctx.fillStyle = "black"
-         ctx.fillText("" + row[0], i * 200 + 400, i * 200 + 150)
+         result.actions.push({
+            type: 'text',
+            value: "" + row[0],
+            pos: { x: i * 200 + 400, y: i * 200 + 150}
+         })
       }
+
+      for (let i = 0; i <= expr.length; ++i) {
+         result.actions.push({
+            type: 'text',
+            value: "" + i,
+            pos: { x: i * 200 + 100, y: expr.length * 200 + 100 },
+            h_center: true,
+         })
+      }
+
+      return result
    }
    register.push({
       id:'den2'
@@ -277,6 +287,21 @@
          if(''+m==='Infinity') return Limit(FSterm)
          if(!m.length) return []
          return expand(m,FSterm,true)
+      }
+      ,FSShort:(m,FSterm) => {
+         if(''+m==='Infinity') return Limit(FSterm)
+         if(!m.length) return []
+         if (FSterm === 0) return expand(m,0,false)
+         if (FSterm === 1) {
+            if(compare(expand(m,0,false), expand(m,0,true)) === 0)
+               return expand(m,1,false)
+            else return expand(m,0,true)
+         }
+         if(
+            compare(expand(m,0,false), expand(m,0,true)) === 0 ||
+            compare(expand(m,1,false), expand(m,0,true)) === 0
+         ) return expand(m,FSterm,false)
+         return expand(m,FSterm-1,false)
       }
       ,init:()=>([
          {expr:[Infinity],low:[[]],subitems:[]}

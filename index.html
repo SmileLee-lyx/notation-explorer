@@ -6,8 +6,8 @@
 <meta charset="UTF-8">
 <meta name="author" content="hyp_cos">
 </head><body><script src="Vue.js"></script>
-<script>var register=[];</script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<script>var register=[];</script>
 <div id="app">
    <div class="tab">
       <button v-for="(tab,idx) in tab_names" @mousedown="current_tab=idx" :disabled="current_tab==idx">{{tab}}</button>
@@ -19,15 +19,18 @@
           @change="handle_import_file"
    >
    <div>
-      <input type="checkbox" value="false" v-model="diagram_follow"/> Diagram follows
+      <input type="checkbox" value="false" v-model="diagram_follow"/> Diagram follows <br>
+      <input type="checkbox" value="true" v-model="use_alternative"/> Use alternative (short) fundamental sequence <br>
+   </div>
+   <div>
+      Navigate to notation: <input type="text" ref="navigate_input"> <button @mousedown="find_notation()"> Find </button>
    </div>
    <div>
       Expansion tier: <button @mousedown="decr_tier()">-</button> {{tiername}} <button @mousedown="incr_tier()">+</button>
       (Press 0~9 to select tier)
    </div>
    <div>
-      Extra FS terms when expand: <button @mousedown="decr_extra()">-</button> {{extra_FS[current_tab]}} <button @mousedown="incr_extra()">+</button>
-      (Press "-" to decrease, and "+" to increase)
+      Auto expansion FS terms limit: <button @mousedown="length_limit--">-</button> {{length_limit}} <button @mousedown="length_limit++">+</button>
    </div>
    <div>
       FS terms shown in tooltip: <button @mousedown="decrFS()">-</button> {{FS_shown[current_tab]}} <button @mousedown="incrFS()">+</button>
@@ -35,7 +38,7 @@
    </div>
    <component :is="current_notation" :subitems="datasets[current_tab].subitems" ref="list"></component>
    <div class="floating-canvas" id="floatingCanvas" :style="{ left: xCanvas + 'px', top: yCanvas + 'px' }" v-show="showCanvas">
-      <canvas id="hoverCanvas" width="10" height="10"></canvas>
+      <canvas id="hoverCanvas" width="10" height="10" :style="{ width: wCanvas + 'px', height: hCanvas + 'px' }"></canvas>
    </div>
 </div>
 <script src="omega-Y.js"></script>
