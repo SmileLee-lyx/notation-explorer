@@ -52,23 +52,17 @@ const app = Vue.createApp({
       },
    },
    methods:{
-      incrFS(){
-         this.FS_shown.splice(this.current_tab,1,this.FS_shown[this.current_tab]+1)
-      },
-      decrFS(){
-         this.FS_shown.splice(this.current_tab,1,Math.max(this.FS_shown[this.current_tab]-1,0))
-      },
-      incr_extra(){
-         this.extra_FS.splice(this.current_tab,1,this.extra_FS[this.current_tab]+1)
-      },
-      decr_extra(){
-         this.extra_FS.splice(this.current_tab,1,Math.max(this.extra_FS[this.current_tab]-1,0))
-      },
-      incr_tier(){
-         this.tier.splice(this.current_tab,1,this.tier[this.current_tab]+1)
-      },
-      decr_tier(){
-         this.tier.splice(this.current_tab,1,Math.max(this.tier[this.current_tab]-1,0))
+      show_hotkeys() {
+         alert(`
+When focused on an input box:
+↑/↓: move up or down
+Shift + ↑/↓, Ctrl + ↑/↓: move up or down faster
+ignoring subitems (resp. sibling items)
+Alt + ↑/↓: move up or down to an item that has an analysis
+Enter: perform an expansion
+Ctrl + H: hide/unhide subtree of current node
+Ctrl + S: export analysis
+         `)
       },
       reset_list(){
          this.datasets.splice(this.current_tab,1, init_dataset(register[this.current_tab]))
@@ -502,30 +496,3 @@ register.forEach((notation,index)=>{
 })
 
 const root=app.mount('#app')
-
-window.addEventListener('keydown',e=>{
-   if(e.ctrlKey||e.altKey||e.shiftKey||e.metaKey) return;
-   var k=e.key
-   if(0<=k&&k<=9){
-      root.tier.splice(root.current_tab,1,+k)
-   }else{
-      switch(k){
-         case ',':
-         case '<':
-            root.decrFS()
-            break
-         case '.':
-         case '>':
-            root.incrFS()
-            break
-         case '-':
-         case '_':
-            root.decr_extra()
-            break
-         case '=':
-         case '+':
-            root.incr_extra()
-            break
-      }
-   }
-})

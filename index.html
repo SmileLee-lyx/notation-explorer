@@ -12,6 +12,7 @@
    <div class="tab">
       <button v-for="(tab,idx) in tab_names" @mousedown="current_tab=idx" :disabled="current_tab==idx">{{tab}}</button>
    </div>
+   <button @mousedown="show_hotkeys()">Show hotkeys</button>
    <button @mousedown="reset_list()">Reset the list</button>
    <button @mousedown="export_xlsx()">Export analysis</button>
    <button @mousedown="import_xlsx()">Import analysis</button>
@@ -27,14 +28,12 @@
    </div>
    <div>
       Expansion tier: <button @mousedown="decr_tier()">-</button> {{tiername}} <button @mousedown="incr_tier()">+</button>
-      (Press 0~9 to select tier)
    </div>
    <div>
       Auto expansion FS terms limit: <button @mousedown="length_limit--">-</button> {{length_limit}} <button @mousedown="length_limit++">+</button>
    </div>
    <div>
       FS terms shown in tooltip: <button @mousedown="decrFS()">-</button> {{FS_shown[current_tab]}} <button @mousedown="incrFS()">+</button>
-      (Press "&lt;" to decrease, and "&gt;" to increase)
    </div>
    <component :is="current_notation" :subitems="datasets[current_tab].subitems" ref="list"></component>
    <div class="floating-canvas" id="floatingCanvas" :style="{ left: xCanvas + 'px', top: yCanvas + 'px' }" v-show="showCanvas">

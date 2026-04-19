@@ -9,6 +9,9 @@ self.onmessage = (e) => {
    const msg = e.data
 
    switch (msg.type) {
+      case "ping":
+         self.postMessage({ type: 'alert', value: msg.value } )
+
       case "init":
          initCanvas(msg.canvas)
          break
