@@ -11,6 +11,7 @@ self.onmessage = (e) => {
    switch (msg.type) {
       case "ping":
          self.postMessage({ type: 'alert', value: msg.value } )
+         break
 
       case "init":
          initCanvas(msg.canvas)
