@@ -324,7 +324,7 @@ let find_prev = (node, quick_level=0) => {
    return quick_level >= 1 ? prev : last_child(prev)
 }
 
-const worker = new Worker("/Diagram.js")
+const worker = new Worker("./Diagram.js")
 
 worker.onmessage = (e) => {
    let data = e.data
