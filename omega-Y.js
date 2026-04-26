@@ -1,7 +1,4 @@
 ;var sequence_compare = (seq1,seq2)=>{
-   if (''+seq1 === 'Infinity' && ''+seq2 === 'Infinity') return 0
-   if (''+seq1 === 'Infinity') return 1
-   if (''+seq2 === 'Infinity') return -1
    if(seq1.length===0){
       if(seq2.length===0) return 0
       else return -1
@@ -16,8 +13,10 @@
 }
 ,sequence_display = expr=>''+expr==='Infinity'?'Limit':''+expr
 ,fromDisplay = (str) => {
-   if (str === 'Limit') return Infinity;
-   return str.split(',').map((s) => parseInt(s, 10))
+   if (str === 'Limit') return [Infinity];
+   let result = str.split(',').map((s) => parseInt(s.trim(), 10));
+   if (result.find(Number.isNaN) !== undefined) throw new Error("Illegal omega-Y sequence");
+   return result;
 }
 ,Y_limit = seq=>seq[seq.length-1]>1
 ;(()=>{
@@ -238,6 +237,93 @@
       }
       return to_sequence(mountain)
    }
+   ,drawDiagram = (seq) => {
+      if (seq.length===0 || !Number.isFinite(seq[0])) return;
+      let mountain = draw_mountain(from_sequence(seq))
+      let y_set = new Set()
+      for (let col of mountain) {
+         for (let entry of col) {
+            y_set.add(entry.y.join(","))
+         }
+      }
+      let y_list = Array.from(y_set).map(y_str => y_str.split(',').filter(x => x.length).map(x => parseInt(x, 10)))
+      y_list.sort(vertical_compare)
+      let py_list = [-100]
+      let line_list = []
+      for (let i = 1; i < y_list.length; i++) {
+         let diff = dimension_difference(y_list[i-1], y_list[i])
+         py_list[i] = py_list[i-1] + (diff === 0 ? 200 : 400 + diff * 60)
+         for (let j = 0; j < diff; ++j) line_list.push(py_list[i-1] + 200 + 30 * (2 * j + 1))
+      }
+      let total_width = seq.length * 200
+      let total_height = py_list[py_list.length-1] + 100
+      let py_map = new Map()
+      for (let i = 1; i < py_list.length; i++) py_map.set(y_list[i].join(","), total_height - py_list[i])
+
+      let result = {
+         width: total_width + 500,
+         height: total_height + 500,
+         actions: [
+            { type: 'lineWidth', value: 15 },
+            { type: 'strokeStyle', value: 'black' },
+            { type: 'font', value: '120px Consolas' },
+            { type: 'fillStyle', value: 'white' },
+            { type: 'fillRect', value: { x: 0, y: 0, w: total_width, h: total_height } },
+            { type: 'strokeRect', value: { x: 0, y: 0, w: total_width, h: total_height } },
+            { type: 'fillStyle', value: 'black' },
+         ]
+      }
+      for (let line of line_list) {
+         result.actions.push({
+            type: 'line',
+            start: { x: 0, y: total_height - line },
+            end: { x: total_width, y: total_height - line }
+         })
+      }
+
+      for (let col of mountain) {
+         for (let entry of col) {
+            if (entry.y.length === 0) continue
+            let py = py_map.get(entry.y.join(","))
+
+            result.actions.push({
+               type: 'text',
+               value: "" + entry.value,
+               pos: { x: 200 * entry.x + 100, y: py + 40 },
+               h_center: true
+            })
+
+            let parent_entry = entry.leftleg_down
+            if (parent_entry && parent_entry.y.length > 0) {
+               let parent_py = py_map.get(parent_entry.y.join(","))
+               result.actions.push({
+                  type: 'line',
+                  start: { x: 200 * entry.x + 100, y: py + 60 },
+                  end: { x: 200 * parent_entry.x + 100, y: py + 140 }
+               })
+               if (parent_py - py > 200) {
+                  result.actions.push({
+                     type: 'line',
+                     start: { x: 200 * parent_entry.x + 100, y: py + 140 },
+                     end: { x: 200 * parent_entry.x + 100, y: parent_py - 60 }
+                  })
+               }
+            }
+
+            let super_entry = entry.rightleg_down
+            if (super_entry && super_entry.y.length > 0) {
+               let super_py = py_map.get(super_entry.y.join(","))
+               result.actions.push({
+                  type: 'line',
+                  start: { x: 200 * entry.x + 100, y: py + 60 },
+                  end: { x: 200 * entry.x + 100, y: super_py - 60 }
+               })
+            }
+         }
+      }
+
+      return result
+   }
    register.push({
       id:'omega-y'
       ,name:'ω-Y sequence'
@@ -268,5 +354,6 @@
          ,{expr:[1],low:[[]],subitems:[]}
          ,{expr:[],low:[[]],subitems:[]}
       ])
+      ,drawDiagram
    })
 })()

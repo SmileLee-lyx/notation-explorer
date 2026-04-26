@@ -31,35 +31,72 @@
    }
    ,display = expr=>''+expr==='Infinity'?'Limit':expr.map(row=>'('+row.slice(1).map(x=>(x[1]?'*':'')+x[0]).join(',')+')'+row[0]).join('')
    ,fromDisplay = (str) => {
-      if (str === 'Limit') return Infinity
+      if (typeof str !== 'string') {
+         throw new Error(`illegal input string: ${str}`);
+      }
 
       const result = [];
-      // 正则匹配每一组：以 ( 开头，中间是数字（可能带*）和逗号，然后是 )数字
+      const fullPattern = /^(\([^)]+\)\d+)*$/;
+      if (!fullPattern.test(str)) {
+         throw new Error(`illegal input string: ${str}`);
+      }
+
       const groupRegex = /\(([^)]+)\)(\d+)/g;
       let match;
+      let lastIndex = 0;
 
       while ((match = groupRegex.exec(str)) !== null) {
-         const inner = match[1];   // 括号内部分，如 "1,2,*3" 或 "4" 或 "1,2"
-         const lengthVal = parseInt(match[2], 10);  // 最后的 L 整数
-
-         // 解析括号内的数字及星号标记
-         const parts = inner.split(',');
-         /**
-          * @type {(number | [number, boolean])[]}
-          */
-         const values = [lengthVal];
-
-         for (const part of parts) {
-            const hasStar = part.startsWith('*');
-            const numStr = hasStar ? part.slice(1) : part;
-            const num = parseInt(numStr, 10);
-            if (isNaN(num)) {
-               throw new Error(`无效数字: "${part}"`);
-            }
-            values.push([num, hasStar]);
+         if (match.index !== lastIndex) {
+            throw new Error(`illegal input string: ${str}`);
          }
 
-         result.push(values);
+         const inner = match[1];
+         const stepLengthStr = match[2];
+
+         if (!/^\d+$/.test(stepLengthStr)) {
+            throw new Error(`illegal input string: ${str}`);
+         }
+         const stepLength = parseInt(stepLengthStr, 10);
+
+         if (inner.length === 0) {
+            throw new Error(`illegal input string: ${str}`);
+         }
+
+         const parts = inner.split(',');
+         const group = [stepLength];
+
+         for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+            if (part.length === 0) {
+               throw new Error(`illegal input string: ${str}`);
+            }
+
+            const hasStar = part.startsWith('*');
+            let numStr = hasStar ? part.slice(1) : part;
+
+            if (hasStar && numStr.length === 0) {
+               throw new Error(`illegal input string: ${str}`);
+            }
+
+            if (!/^\d+$/.test(numStr)) {
+               throw new Error(`illegal input string: ${str}`);
+            }
+
+            const num = parseInt(numStr, 10);
+
+            if (hasStar) {
+               group.push([num, true]);
+            } else {
+               group.push([num]);
+            }
+         }
+
+         result.push(group);
+         lastIndex = match.index + match[0].length;
+      }
+
+      if (lastIndex !== str.length) {
+         throw new Error(`illegal input string: ${str}`);
       }
 
       return result;

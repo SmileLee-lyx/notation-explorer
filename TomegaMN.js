@@ -38,6 +38,136 @@
       if(sep.every(column=>!column.length)) return ','.repeat(sep.length)+v
       return mountain_display(sep)+v
    }).join('')+')').join('')
+   ,mountain_fromDisplay = (str) => {
+      if (typeof str !== 'string') {
+         throw new Error(`illegal input string: ${str}`);
+      }
+
+      function findMatchingParen(s, start) {
+         let count = 1;
+         let i = start + 1;
+         while (i < s.length) {
+            if (s[i] === '(') count++;
+            else if (s[i] === ')') {
+               count--;
+               if (count === 0) return i;
+            }
+            i++;
+         }
+         throw new Error(`illegal input string: ${str}`);
+      }
+
+      function parseExprPrefix(s, start, isSepContext) {
+         if (start >= s.length) return [[], start];
+
+         if (isSepContext && s[start] === ',') {
+            let commaCount = 0;
+            while (start + commaCount < s.length && s[start + commaCount] === ',') {
+               commaCount++;
+            }
+            const expr = [];
+            for (let i = 0; i < commaCount; i++) {
+               expr.push([]);
+            }
+            return [expr, start + commaCount];
+         }
+
+         const cols = [];
+         let i = start;
+         while (i < s.length && s[i] === '(') {
+            const j = findMatchingParen(s, i);
+            const colContent = s.substring(i + 1, j);
+
+            const terms = [];
+            let idx = 0;
+            while (idx < colContent.length) {
+               const [sep, nextIdx] = parseExprPrefix(colContent, idx, true);
+               idx = nextIdx;
+
+               let valueStr = '';
+               while (idx < colContent.length && colContent[idx] >= '0' && colContent[idx] <= '9') {
+                  valueStr += colContent[idx];
+                  idx++;
+               }
+               if (valueStr === '') {
+                  throw new Error(`illegal input string: ${str}`);
+               }
+               terms.push([parseInt(valueStr, 10), sep]);
+            }
+
+            cols.push(terms);
+            i = j + 1;
+         }
+
+         return [cols, i];
+      }
+
+      const [result, end] = parseExprPrefix(str, 0, false);
+      if (end !== str.length) {
+         throw new Error(`illegal input string: ${str}`);
+      }
+      return result;
+   }
+   ,mountain_fromDisplay_simple = (str) => {
+      if (typeof str !== 'string') {
+         throw new Error(`illegal input string: ${str}`);
+      }
+
+      str = str.trim();
+      if (str === '') return [];
+
+      const cols = [];
+      const parts = str.split(/\s+/);
+
+      for (let part of parts) {
+         if (part === '0') {
+            cols.push([]);
+            continue;
+         }
+
+         const terms = [];
+         let i = 0;
+
+         while (i < part.length) {
+            let sep = [];
+
+            if (part[i] === ',') {
+               let commaCount = 0;
+               while (i < part.length && part[i] === ',') {
+                  commaCount++;
+                  i++;
+               }
+               for (let j = 0; j < commaCount; j++) {
+                  sep.push([]);
+               }
+            } else {
+               sep = [[]];
+            }
+
+            let valueStr = '';
+            if (i < part.length && part[i] === '(') {
+               const closeParen = part.indexOf(')', i);
+               if (closeParen === -1) {
+                  throw new Error(`illegal input string: ${str}`);
+               }
+               valueStr = part.substring(i + 1, closeParen);
+               i = closeParen + 1;
+            } else {
+               if (i >= part.length || part[i] < '0' || part[i] > '9') {
+                  throw new Error(`illegal input string: ${str}`);
+               }
+               valueStr = part[i];
+               i++;
+            }
+
+            terms.push([parseInt(valueStr, 10), sep]);
+         }
+
+         cols.push(terms);
+      }
+
+      return cols;
+   }
    ,vertical_compare = (a,b)=>{//each vertical = [separator,separator,...,separator]
       var i=0,c
       while(true){
@@ -112,6 +242,12 @@
       var rightmost = A0.length-1
       var topmost = A0[rightmost].length-1
       var A = JSON.parse(JSON.stringify(A0))
+
+      if (topmost === -1) {
+         A.pop()
+         return A
+      }
+
       var topright_entry = A[rightmost][topmost]
       var topright_separator = topright_entry[1]
 
@@ -190,6 +326,8 @@
       id:'t-omega-mn'
       ,name:'Transfinite ω mountain notation'
       ,display:expr=>''+expr==='Infinity'?'Limit':mountain_display(expr)
+      ,fromDisplay:str=>str==='Limit'?Infinity:
+         str.trim().startsWith("0")? mountain_fromDisplay_simple(str):mountain_fromDisplay(str)
       ,able:mountain_is_limit
       ,compare:mountain_compare
       ,FS:(m,FSterm)=>{
@@ -202,9 +340,30 @@
          if(m.length===0) return []
          return expand(m,FSterm)
       }
+      ,FSShort:(m,FSterm)=> {
+         if(''+m==='Infinity') return Limit(FSterm)
+         if(m.length === 0) return []
+         if (FSterm === 0) return expand(m,0,true)
+         if (FSterm === 1) {
+            if(mountain_compare(expand(m,0,true), expand(m,0,false)) === 0)
+               return expand(m,1,true)
+            else return expand(m,0,false)
+         }
+         if(
+            mountain_compare(expand(m,0,true), expand(m,0,false)) === 0 ||
+            mountain_compare(expand(m,1,true), expand(m,0,false)) === 0
+         ) return expand(m,FSterm,true)
+         return expand(m,FSterm-1,true)
+      }
       ,init:()=>([
          {expr:[[Infinity]],low:[[]],subitems:[]}
          ,{expr:[],low:[[]],subitems:[]}
       ])
+      ,column_verticals
+      ,find_index_below_row
+      ,parent
+      ,mountain_display
+      ,expand
+      ,column_compare
    })
 })()

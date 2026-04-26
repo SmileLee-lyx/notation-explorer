@@ -177,60 +177,19 @@
    }
    ,Limit_row = n=>Array(3+n).fill(0).map((x,nn)=>3<=nn&&nn<2+n?[nn,true]:[nn]).concat(2).reverse()
    ,Limit = n=>[[1,[1],[0]],[1,[2],[1],[0]]].concat(Array(n).fill(0).map((x,nn)=>Limit_row(1+nn)))
-   ,drawDiagram = (elem,expr) => {
-      if (''+expr==='Infinity') {
-         elem.width = 10
-         elem.height = 10
-         return
-      }
 
-      elem.width = expr.length * 20 + 40
-      elem.height = expr.length * 20
-
-      const ctx = elem.getContext("2d")
-
-      ctx.clearRect(0, 0, elem.width, elem.height);
-      ctx.fillStyle="white"
-      ctx.fillRect(0, 0, elem.width, elem.height);
-      ctx.strokeStyle="black"
-      ctx.strokeRect(0, 0, elem.width, elem.height);
-
-      for (let i = 0; i < expr.length; ++i) {
-         let row = expr[i]
-
-         let prev = undefined
-
-         for (let j = 1; j < row.length; ++j) {
-            let pos = row[j][0];
-            let mark = row[j][1];
-
-            ctx.beginPath()
-            ctx.arc(pos * 20 + 10, i * 20 + 10, 5, 0, 2 * Math.PI)
-            ctx.fillStyle = mark ? "black" : "white"
-            ctx.fill()
-            ctx.strokeStyle = "black"
-            ctx.stroke()
-
-            if (prev !== undefined) {
-               ctx.beginPath()
-               ctx.moveTo(pos * 20 + 15, i * 20 + 10)
-               ctx.lineTo(prev * 20 + 5, i * 20 + 10)
-               ctx.strokeStyle = "black"
-               ctx.stroke()
-            }
-
-            prev = pos
-         }
-
-         ctx.font = "12px Arial"
-         ctx.fillStyle = "black"
-         ctx.fillText("" + row[0], i * 20 + 40, i * 20 + 15)
-      }
+   let den2_core
+   function getDen2() {
+      if (den2_core) return den2_core
+      return den2_core = register.find(n => n.id === 'den2')
    }
+
    register.push({
       id:'den3'
       ,name:'DEN3'
       ,display
+      ,fromDisplay: str => getDen2().fromDisplay(str)
+      ,drawDiagram: expr => getDen2().drawDiagram(expr)
       ,able:isLimit
       ,semiable:isNonzero
       ,compare
@@ -248,6 +207,5 @@
          {expr:[Infinity],low:[[]],subitems:[]}
          ,{expr:[],low:[[]],subitems:[]}
       ])
-      ,drawDiagram
    })
 })()

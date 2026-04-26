@@ -1,29 +1,24 @@
 ;
 
-function define_parent(child, parent) {
-   Object.defineProperty(child, 'parent', {
-      get() { return parent; },
-      enumerable: false,
-   })
-}
+const node_map = new Map()
 
 const init_dataset = (notation) => {
    let root_item = {
-      is_root: true, mark: 0
+      is_root: true, mark: 0, path: undefined
    }
    root_item.subitems = notation.init().map(
       (item, index) => {
-         let node = {
+         return {
             expr: item.expr,
             bound: item.low[0],
             subitems: [],
             node: undefined,
             mark: null,
             index,
-            analysis: undefined
-         };
-         define_parent(node, root_item)
-         return node
+            path: "" + index,
+            analysis: undefined,
+            parent: root_item,
+         }
       }
    );
    return root_item
@@ -36,10 +31,10 @@ const app = Vue.createApp({
       tier:register.map(()=>0),
       length_limit:20,
       datasets:register.map(init_dataset),
-      xCanvas:0,
-      yCanvas:0,
+      pCanvas: { x:0, y:0, w:0, h:0},
       showCanvas:false,
       diagram_follow:false,
+      diagram_scale:0,
       use_alternative:true,
    }),
    computed:{
@@ -50,6 +45,10 @@ const app = Vue.createApp({
          if(0<=n&&n<=8) return ['small','single','double','triple','quadruple','quintuple','sextuple','septuple','octuple'][n]+' expansion'
          return n+'-fold expansion'
       },
+      pCanvasScaled() {
+         let scale = 0.1 * Math.pow(1.25, this.diagram_scale)
+         return { w: this.pCanvas.w * scale, h: this.pCanvas.h * scale }
+      }
    },
    methods:{
       show_hotkeys() {
@@ -148,7 +147,18 @@ Ctrl + S: export analysis
          let displayed_expr = this.$refs.navigate_input.value
          let expr = notation.fromDisplay(displayed_expr)
          import_analysis(this.datasets[this.current_tab], [[expr]], notation, this.use_alternative, true)
-      }
+      },
+      navigate_keydown(event) {
+         if (event.key === 'Enter') {
+            event.preventDefault();
+            this.find_notation()
+         }
+      },
+
+      incr_tier() { this.tier[this.current_tab]++ },
+      decr_tier() { this.tier[this.current_tab] = Math.max(this.tier[this.current_tab] - 1, 0) },
+      incrFS() { this.FS_shown[this.current_tab]++ },
+      decrFS() { this.FS_shown[this.current_tab] = Math.max(this.FS_shown[this.current_tab] - 1, 0) },
    },
    mounted() {
       canvas = document.getElementById('hoverCanvas');
@@ -160,6 +170,21 @@ Ctrl + S: export analysis
       }, [offscreen])
    }
 })
+
+const worker = new Worker("./Diagram.js")
+
+let canvas
+
+worker.onmessage = (e) => {
+   let data = e.data
+   if (data.type === 'alert') {
+      console.log(data.value)
+   }
+   if (data.type === 'resize') {
+      root.pCanvas.w = data.width
+      root.pCanvas.h = data.height
+   }
+}
 
 function import_analysis(root_item, analysis_list, notation, use_short, auto_focus = false) {
    let item = last_child(root_item)
@@ -181,7 +206,8 @@ function import_analysis(root_item, analysis_list, notation, use_short, auto_foc
       if (analysis_list[index][1] !== undefined) item.analysis = analysis_list[index][1]
 
       if (index === 0 && auto_focus) {
-         if (item.node) item.node.$refs.input.focus(); else item.auto_focus = true;
+         let node = node_map.get(item.path)
+         if (node) node.$refs.input.focus({ preventScroll: true }); else item.auto_focus = true;
       }
 
       ++index
@@ -246,9 +272,10 @@ function expand_item(item, notation, use_short, max_tier, auto_focus) {
          subitems: [],
          mark: null,
          index: new_index,
-         auto_focus: af
+         auto_focus: af,
+         parent: to_parent ? item.parent : item,
       }
-      define_parent(new_item, to_parent ? item.parent : item)
+      new_item.path = new_item.parent.path + "," + new_index
       if (to_parent)
          item.parent.subitems.splice(item.parent.subitems.length, 0, new_item)
       else {
@@ -272,7 +299,7 @@ function expand_item(item, notation, use_short, max_tier, auto_focus) {
 }
 
 const get_FS = (notation, use_short) => {
-   if (use_short) return notation.FSShort || notation.FSalter || notation.FS
+   if (use_short) return notation.FSShort || notation.FS
    return notation.FS
 }
 
@@ -324,20 +351,37 @@ let find_prev = (node, quick_level=0) => {
    return quick_level >= 1 ? prev : last_child(prev)
 }
 
-const worker = new Worker("./Diagram.js")
+function getCaretPixelPosition(input, pos) {
+   const div = document.createElement('div');
+   const style = getComputedStyle(input);
 
-worker.onmessage = (e) => {
-   let data = e.data
-   if (data.type === 'alert') {
-      console.log(data.value)
-   }
-   if (data.type === 'resize') {
-      canvas.style.width = (data.width / 10) + 'px'
-      canvas.style.height = (data.height / 10) + 'px'
-   }
+   // 复制关键样式
+   [
+      'font', 'padding', 'border', 'white-space',
+      'letter-spacing'
+   ].forEach(prop => {
+      div.style[prop] = style[prop];
+   });
+
+   div.style.position = 'absolute';
+   div.style.visibility = 'hidden';
+   div.style.whiteSpace = 'pre';
+
+   const text = input.value.slice(0, pos);
+   div.textContent = text;
+
+   const span = document.createElement('span');
+   span.textContent = '|';
+   div.appendChild(span);
+
+   document.body.appendChild(div);
+
+   const left = span.offsetLeft;
+
+   document.body.removeChild(div);
+
+   return left;
 }
-
-let canvas
 
 register.forEach((notation,index)=>{
    app.component(notation.id+'-list',{
@@ -347,6 +391,7 @@ register.forEach((notation,index)=>{
          ,shownFS:[]
          ,tooltip:false
          ,tooltipX:{}
+         ,inputVisited:false
       }),
       methods:{
          onmouseenter(event){
@@ -361,9 +406,8 @@ register.forEach((notation,index)=>{
                }
 
                root.showCanvas = true
-               root.xCanvas = event.clientX + 100
-               root.yCanvas = event.clientY + 15
-
+               root.pCanvas.x = event.clientX + 100
+               root.pCanvas.y = event.clientY + 15
             }
 
             if(!this.notation.able(this.item.expr)) return;
@@ -376,8 +420,8 @@ register.forEach((notation,index)=>{
          },
          onmousemove(event) {
             if (root.diagram_follow) {
-               root.xCanvas = event.clientX + 100
-               root.yCanvas = event.clientY + 15
+               root.pCanvas.x = event.clientX + 100
+               root.pCanvas.y = event.clientY + 15
             }
          },
          onmouseleave(event){
@@ -396,16 +440,22 @@ register.forEach((notation,index)=>{
             }
          },
          onfocus(event) {
+            /** @type {HTMLInputElement} */
             const target = event.target;
             const rect = target.getBoundingClientRect();
             const currentScroll = window.scrollY;
 
-            const offsetTop = rect.top + currentScroll - 100;
+            const targetScroll = rect.top + currentScroll - 100;
 
-            window.scrollTo({
-               top: offsetTop,
-               behavior: 'smooth'
-            });
+            window.scrollTo({ top: targetScroll, behavior: 'smooth' });
+
+            if (!this.inputVisited) {
+               console.log(target.value)
+               this.inputVisited = true
+               target.setSelectionRange(target.value.length, target.value.length);
+            }
+            let pixelPosition = getCaretPixelPosition(target, target.selectionStart)
+            target.scrollLeft = (pixelPosition - target.clientWidth / 2)
 
             if (this.notation.drawDiagram != null) {
                let diagram = this.notation.drawDiagram(this.item.expr)
@@ -420,12 +470,15 @@ register.forEach((notation,index)=>{
                   root.showCanvas = true
 
                   let rect = this.$refs.input.getBoundingClientRect()
-                  root.xCanvas = rect.left + 5
-                  root.yCanvas = 105 + rect.bottom - rect.top
+                  root.pCanvas.x = rect.left + 5
+                  root.pCanvas.y = 105 + rect.bottom - rect.top
                } else {
                   root.showCanvas = false
                }
             }
+         },
+         onblur(event){
+            root.showCanvas = false
          },
          onkeydown(event) {
             if (event.key === 'ArrowUp') {
@@ -434,16 +487,14 @@ register.forEach((notation,index)=>{
                let quick_level = (event.altKey ? 4 : 0) + (event.ctrlKey ? 2 : 0) + (event.shiftKey ? 1 : 0)
 
                let prev = find_prev(this.item, quick_level)
-               let input = prev?.node?.$refs?.input
-               if (input) input.focus()
+               if (prev) node_map.get(prev.path)?.$refs?.input?.focus({ preventScroll: true })
             } else if (event.key === 'ArrowDown') {
                event.preventDefault()
 
                let quick_level = (event.altKey ? 4 : 0) + (event.ctrlKey ? 2 : 0) + (event.shiftKey ? 1 : 0)
 
                let next = find_next(this.item, quick_level);
-               let input = next?.node?.$refs?.input
-               if (input) input.focus()
+               if (next) node_map.get(next.path)?.$refs?.input?.focus({ preventScroll: true })
             } else if (event.key === 'Enter') {
                event.preventDefault()
                let tier = event.shiftKey ? 1 : root.tier[index]
@@ -464,19 +515,19 @@ register.forEach((notation,index)=>{
          },
       },
       mounted() {
-         this.item.node = this
+         node_map.set(this.item.path, this)
 
          if (this.item.auto_focus) {
-            this.$refs.input.focus()
+            this.$refs.input.focus({ preventScroll: true })
             this.item.auto_focus = false
          }
       },
       unmounted() {
-         delete this.item.node
+         node_map.delete(this.item.path)
       },
       template:`<li><div class="shown-item" :class="{analyzed: item.analysis !== undefined}" @mouseenter="onmouseenter" @mousemove="onmousemove" @mouseleave="onmouseleave" @mousedown="onmousedown">
             <input type="checkbox" v-model="item.hide_child" @mousedown.stop>
-            <input type="text" @mousedown.stop @keydown.stop="onkeydown" ref="input" @focus="onfocus" v-model="item.analysis"/>
+            <input type="text" @mousedown.stop @keydown.stop="onkeydown" ref="input" @focus="onfocus" @blur="onblur" v-model="item.analysis"/>
             <span v-html="notation.display(item.expr)"></span>
             <div class="tooltip" v-if="tooltip" :style="tooltipX" @mousedown.stop>
             <span v-html="notation.display(item.expr)"></span> fundamental sequence:

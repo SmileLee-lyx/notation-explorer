@@ -326,10 +326,19 @@
       }
       return to_sequence(mountain)
    }
+
+   let wy_core
+   function getWy() {
+      if (wy_core) return wy_core
+      return wy_core = register.find(n => n.id === 'omega-y')
+   }
+
    register.push({
       id:'omega-y-weak'
       ,name:'ω-Y (weak magma)'
       ,display:sequence_display
+      ,fromDisplay: str => getWy().fromDisplay(str)
+      ,drawDiagram: expr => getWy().drawDiagram(expr)
       ,able:Y_limit
       ,compare:sequence_compare
       ,FS:(()=>{
@@ -366,6 +375,8 @@
       id:'omega-y-medium'
       ,name:'ω-Y (medium magma)'
       ,display:sequence_display
+      ,fromDisplay: str => getWy().fromDisplay(str)
+      ,drawDiagram: expr => getWy().drawDiagram(expr)
       ,able:Y_limit
       ,compare:sequence_compare
       ,FS:(()=>{
@@ -402,6 +413,8 @@
       id:'omega-y-strong'
       ,name:'ω-Y (strong magma)'
       ,display:sequence_display
+      ,fromDisplay: str => getWy().fromDisplay(str)
+      ,drawDiagram: expr => getWy().drawDiagram(expr)
       ,able:Y_limit
       ,compare:sequence_compare
       ,FS:(()=>{
