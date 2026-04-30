@@ -7,7 +7,7 @@
 <meta name="author" content="hyp_cos">
 </head><body><script src="Vue.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
-<script>var register=[];</script>
+<script>var register=[]; var analysis_register=[]; </script>
 <div id="app">
    <div class="tab">
       <button v-for="(tab,idx) in tab_names" @mousedown="current_tab=idx" :disabled="current_tab==idx">{{tab}}</button>
@@ -21,7 +21,9 @@
    >
    <div>
       <input type="checkbox" value="false" v-model="diagram_follow"/> Diagram follows
-      <input type="range" min="-5" max="5" step="0.1" v-model="diagram_scale"> Diagram size: {{diagram_scale}}
+      <input type="range" min="-5" max="5" step="0.1" v-model="diagram_scale"
+             @focus="showCanvas = true" @blur="showCanvas = false"
+      > Diagram size: {{diagram_scale}}
       <br>
       <input type="checkbox" value="true" v-model="use_alternative"/> Use alternative (short) fundamental sequence <br>
    </div>
@@ -37,10 +39,18 @@
    <div>
       FS terms shown in tooltip: <button @mousedown="decrFS()">-</button> {{FS_shown[current_tab]}} <button @mousedown="incrFS()">+</button>
    </div>
-   <component :is="current_notation" :subitems="datasets[current_tab].subitems" ref="list"></component>
-   <div class="floating-canvas" id="floatingCanvas" :style="{ left: pCanvas.x + 'px', top: pCanvas.y + 'px' }" v-show="showCanvas">
+   <div>
+      Analysis notation:
+      <select v-model="current_analysis_index">
+         <option disabled :value="-1"/>
+         <option v-for="(name, idx) in analysis_names" :value="idx">{{ name }}</option>
+      </select>
+   </div>
+   <component :is="current_notation_name" :subitems="datasets[current_tab].subitems" ref="list"></component>
+   <div class="floating-canvas" id="floatingCanvas" :style="{ left: pCanvas.x + 'px', top: pCanvas.y + 'px' }" v-show="showCanvas && !pCanvasModifier.hide">
       <canvas id="hoverCanvas" width="10" height="10" :style="{ width: pCanvasScaled.w + 'px', height: pCanvasScaled.h + 'px' }"/>
    </div>
+   <fs-dialog v-model="show_fs_dialog" :init="current_analysis_notation.fs_default" @confirm="calc_analysis_fs"/>
 </div>
 <script src="omega-Y.js"></script>
 <script src="omega-Y-magma.js"></script>

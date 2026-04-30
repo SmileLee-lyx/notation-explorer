@@ -1,7 +1,7 @@
 ;(() => {
    let t_omega_mn
 
-   function core() {
+   function wmn() {
       if (!t_omega_mn) {
          t_omega_mn = register.find(n => n.id === 't-omega-mn')
       }
@@ -9,7 +9,7 @@
    }
 
    function calcAncestorDepths(mountain) {
-      let wmnCore = core()
+      let wmnCore = wmn()
 
       if (!Array.isArray(mountain) || mountain.length === 0) return [];
       const verticalss = mountain.map(wmnCore.column_verticals);
@@ -71,7 +71,7 @@
          }
       }
 
-      let wmnCore = core();
+      let wmnCore = wmn();
       let verticalss = wmnMountain.map(wmnCore.column_verticals);
       for (let i = 0; i < wmnMountain.length; i++) {
          const column = wmnMountain[i];
@@ -101,16 +101,35 @@
       return wmnMountain;
    }
 
-   register.push({
+   let core
+
+   register.push(core = {
       id: 't-omega-dmn',
       name: 'TωDMN',
-      display: expr => '' + expr === 'Infinity' ? 'Limit' : core().display(convertToWDMN(expr)),
-      fromDisplay: str => str === 'Limit' ? Infinity : convertFromWDMN(core().fromDisplay(str)),
-      able: (a) => core().able(a),
-      compare: (a, b) => core().compare(a, b),
-      FS: (m, FSterm) => core().FS(m, FSterm),
-      FSalter: (m, FSterm) => core().FSalter(m, FSterm),
-      FSShort: (m, FSterm) => core().FSShort(m, FSterm),
-      init: () => core().init()
+      display: expr => '' + expr === 'Infinity' ? 'Limit' : wmn().display(convertToWDMN(expr)),
+      display_alter: expr => '' + expr === 'Infinity' ? 'Limit' : wmn().display_alter(convertToWDMN(expr)),
+      fromDisplay: str => str === 'Limit' ? Infinity : convertFromWDMN(wmn().fromDisplay(str)),
+      fromDisplay_alter: str => str === 'Limit' ? Infinity : convertFromWDMN(wmn().fromDisplay_alter(str)),
+      able: (a) => wmn().able(a),
+      compare: (a, b) => wmn().compare(a, b),
+      FS: (m, FSterm) => wmn().FS(m, FSterm),
+      FSalter: (m, FSterm) => wmn().FSalter(m, FSterm),
+      FSShort: (m, FSterm) => wmn().FSShort(m, FSterm),
+      init: () => wmn().init()
    })
+   analysis_register.push({
+      id:'t-omega-mn',
+      name:'TωDMN',
+      FS:core.FS,
+      display:core.display,
+      fromDisplay:core.fromDisplay,
+      fs_default:1,
+   }, {
+      id:'t-omega-mn-simple',
+      name:'TωDMN (Simple)',
+      FS:core.FS,
+      display:core.display_alter,
+      fromDisplay:core.fromDisplay_alter,
+      fs_default:1,
+   }, )
 })()

@@ -254,7 +254,7 @@
          actions: [
             { type: 'lineWidth', value: 15 },
             { type: 'strokeStyle', value: 'black' },
-            { type: 'font', value: '120px Consolas' },
+            { type: 'font', size: 120, font: 'Consolas' },
             { type: 'fillStyle', value: 'white' },
             { type: 'fillRect', value: { x: 0, y: 0, w: width, h: height } },
             { type: 'strokeRect', value: { x: 0, y: 0, w: width, h: height } },

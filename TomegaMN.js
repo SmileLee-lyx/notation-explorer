@@ -38,6 +38,20 @@
       if(sep.every(column=>!column.length)) return ','.repeat(sep.length)+v
       return mountain_display(sep)+v
    }).join('')+')').join('')
+   ,mountain_display_simple = m=> {
+      return m.map(column => {
+         if (column.length === 0) return '0'
+         return column.map(([v, sep]) => {
+            let v_rep = v >= 10 ? '(' + v + ')' : v.toString()
+            let sep_rep
+            if (sep.every(column=>!column.length)) {
+               if (sep.length === 1) sep_rep = ''
+               else sep_rep = ','.repeat(sep.length)
+            } else sep_rep = '[' + mountain_display_simple(sep) + ']'
+            return sep_rep + v_rep
+         }).join('')
+      }).join(' ')
+   }
    ,mountain_fromDisplay = (str) => {
       if (typeof str !== 'string') {
          throw new Error(`illegal input string: ${str}`);
@@ -116,57 +130,81 @@
       str = str.trim();
       if (str === '') return [];
 
-      const cols = [];
-      const parts = str.split(/\s+/);
+      function parseExpr(s, start) {
+         const cols = [];
+         let i = start;
+         const len = s.length;
 
-      for (let part of parts) {
-         if (part === '0') {
-            cols.push([]);
-            continue;
-         }
+         while (i < len && s[i] === ' ') i++;
 
-         const terms = [];
-         let i = 0;
+         while (i < len && s[i] !== ']') {
+            if (s[i] === ' ') {
+               i++;
+               continue;
+            }
 
-         while (i < part.length) {
-            let sep = [];
+            if (s[i] === '0') {
+               cols.push([]);
+               i++;
+               continue;
+            }
 
-            if (part[i] === ',') {
-               let commaCount = 0;
-               while (i < part.length && part[i] === ',') {
-                  commaCount++;
+            const terms = [];
+            while (i < len && s[i] !== ' ' && s[i] !== ']') {
+               let sep;
+
+               if (s[i] === '[') {
+                  const [sepExpr, nextI] = parseExpr(s, i + 1);
+                  if (nextI >= len || s[nextI] !== ']') {
+                     throw new Error(`illegal input string: ${str}`);
+                  }
+                  sep = sepExpr;
+                  i = nextI + 1;
+               } else if (s[i] === ',') {
+                  let commaCount = 0;
+                  while (i < len && s[i] === ',') {
+                     commaCount++;
+                     i++;
+                  }
+                  sep = [];
+                  for (let t = 0; t < commaCount; t++) {
+                     sep.push([]);
+                  }
+               } else {
+                  sep = [[]];
+               }
+
+               let valueStr = '';
+               if (i < len && s[i] === '(') {
+                  const closeParen = s.indexOf(')', i);
+                  if (closeParen === -1) {
+                     throw new Error(`illegal input string: ${str}`);
+                  }
+                  valueStr = s.substring(i + 1, closeParen);
+                  i = closeParen + 1;
+               } else {
+                  if (i >= len || s[i] < '0' || s[i] > '9') {
+                     throw new Error(`illegal input string: ${str}`);
+                  }
+                  valueStr = s[i];
                   i++;
                }
-               for (let j = 0; j < commaCount; j++) {
-                  sep.push([]);
-               }
-            } else {
-               sep = [[]];
+
+               terms.push([parseInt(valueStr, 10), sep]);
             }
 
-            let valueStr = '';
-            if (i < part.length && part[i] === '(') {
-               const closeParen = part.indexOf(')', i);
-               if (closeParen === -1) {
-                  throw new Error(`illegal input string: ${str}`);
-               }
-               valueStr = part.substring(i + 1, closeParen);
-               i = closeParen + 1;
-            } else {
-               if (i >= part.length || part[i] < '0' || part[i] > '9') {
-                  throw new Error(`illegal input string: ${str}`);
-               }
-               valueStr = part[i];
-               i++;
-            }
-
-            terms.push([parseInt(valueStr, 10), sep]);
+            cols.push(terms);
+            while (i < len && s[i] === ' ') i++;
          }
 
-         cols.push(terms);
+         return [cols, i];
       }
 
-      return cols;
+      const [result, end] = parseExpr(str, 0);
+      if (end !== str.length) {
+         throw new Error(`illegal input string: ${str}`);
+      }
+      return result;
    }
    ,vertical_compare = (a,b)=>{//each vertical = [separator,separator,...,separator]
       var i=0,c
@@ -322,12 +360,15 @@
       return A
    }
    ,Limit = n=>n>0?[[],[[1,Limit(n-1)]]]:[[]]
-   register.push({
+
+   let core
+   register.push(core = {
       id:'t-omega-mn'
       ,name:'Transfinite ω mountain notation'
       ,display:expr=>''+expr==='Infinity'?'Limit':mountain_display(expr)
-      ,fromDisplay:str=>str==='Limit'?Infinity:
-         str.trim().startsWith("0")? mountain_fromDisplay_simple(str):mountain_fromDisplay(str)
+      ,display_alter:expr=>''+expr==='Infinity'?'Limit':mountain_display_simple(expr)
+      ,fromDisplay:str=>str==='Limit'?Infinity:mountain_fromDisplay(str)
+      ,fromDisplay_alter:str=>str==='Limit'?Infinity:mountain_fromDisplay_simple(str)
       ,able:mountain_is_limit
       ,compare:mountain_compare
       ,FS:(m,FSterm)=>{
@@ -366,4 +407,19 @@
       ,expand
       ,column_compare
    })
+   analysis_register.push({
+      id:'t-omega-mn',
+      name:'TωMN',
+      FS:core.FS,
+      display:core.display,
+      fromDisplay:core.fromDisplay,
+      fs_default:1,
+   }, {
+      id:'t-omega-mn-simple',
+      name:'TωMN (Simple)',
+      FS:core.FS,
+      display:core.display_alter,
+      fromDisplay:core.fromDisplay_alter,
+      fs_default:1,
+   }, )
 })()

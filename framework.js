@@ -27,26 +27,32 @@ const init_dataset = (notation) => {
 const app = Vue.createApp({
    data:()=>({
       current_tab:0,
+      current_analysis_index:-1,
       FS_shown:register.map(()=>3),
       tier:register.map(()=>0),
       length_limit:20,
       datasets:register.map(init_dataset),
-      pCanvas: { x:0, y:0, w:0, h:0},
+      pCanvas: { x:0, y:0, w:0, h:0, s:1 },
+      pCanvasModifier: { x:0, y:0, hide:false },
       showCanvas:false,
       diagram_follow:false,
       diagram_scale:0,
       use_alternative:true,
+      show_fs_dialog:false,
+      analysis_fs_target:undefined,
    }),
    computed:{
-      current_notation() { return register[this.current_tab].id },
+      current_notation_name() { return register[this.current_tab].id },
+      current_analysis_notation() { return analysis_register[this.current_analysis_index] || {} },
       tab_names:()=> register.map(notation=>notation.name),
+      analysis_names:() => analysis_register.map(notation=>notation.name),
       tiername(){
          var n = this.tier[this.current_tab]
          if(0<=n&&n<=8) return ['small','single','double','triple','quadruple','quintuple','sextuple','septuple','octuple'][n]+' expansion'
          return n+'-fold expansion'
       },
       pCanvasScaled() {
-         let scale = 0.1 * Math.pow(1.25, this.diagram_scale)
+         let scale = 0.1 / this.pCanvas.s * Math.pow(1.25, this.diagram_scale)
          return { w: this.pCanvas.w * scale, h: this.pCanvas.h * scale }
       }
    },
@@ -55,12 +61,14 @@ const app = Vue.createApp({
          alert(`
 When focused on an input box:
 ↑/↓: move up or down
+Ctrl + ←/→: move cursor to leftmost/rightmost
 Shift + ↑/↓, Ctrl + ↑/↓: move up or down faster
 ignoring subitems (resp. sibling items)
 Alt + ↑/↓: move up or down to an item that has an analysis
 Enter: perform an expansion
 Ctrl + H: hide/unhide subtree of current node
 Ctrl + S: export analysis
+Ctrl + E: expand analysis fundamental sequence
          `)
       },
       reset_list(){
@@ -96,8 +104,6 @@ Ctrl + S: export analysis
       },
       handle_import_file(event) {
          const notation = register[this.current_tab]
-         let fromDisplay = notation.fromDisplay
-         if (!fromDisplay) return;
 
          let file = event.target.files[0];
          if (!file) return;
@@ -121,12 +127,8 @@ Ctrl + S: export analysis
                   let expr_str = row[0] || '';
                   let analysis = row[1] || '';
                   if (!analysis.length) continue
-                  let expr
-                  try {
-                     expr = fromDisplay(expr_str);
-                  } catch (e) {
-                     continue
-                  }
+                  let expr = safeFromDisplay(notation, expr_str)
+                  if (expr === undefined) continue
                   objects.push([expr, analysis]);
                }
             }
@@ -143,9 +145,9 @@ Ctrl + S: export analysis
       },
       find_notation() {
          let notation = register[this.current_tab]
-         if (!notation.fromDisplay) return
          let displayed_expr = this.$refs.navigate_input.value
-         let expr = notation.fromDisplay(displayed_expr)
+         let expr = safeFromDisplay(notation, displayed_expr)
+         if (expr === undefined) return;
          import_analysis(this.datasets[this.current_tab], [[expr]], notation, this.use_alternative, true)
       },
       navigate_keydown(event) {
@@ -154,11 +156,23 @@ Ctrl + S: export analysis
             this.find_notation()
          }
       },
+      calc_analysis_fs(fsIndex) {
+         let node = node_map.get(this.analysis_fs_target);
+         let target = node?.$refs?.input
+         if (!target) return;
+         let notation = analysis_register[this.current_analysis_index];
+         if (!notation) return;
+         let result = notation.display(notation.FS(notation.fromDisplay(target.value), fsIndex))
+         node.item.analysis = target.value = result
+         target.focus();
+         target.setSelectionRange(result.length, result.length);
+      },
 
       incr_tier() { this.tier[this.current_tab]++ },
       decr_tier() { this.tier[this.current_tab] = Math.max(this.tier[this.current_tab] - 1, 0) },
       incrFS() { this.FS_shown[this.current_tab]++ },
       decrFS() { this.FS_shown[this.current_tab] = Math.max(this.FS_shown[this.current_tab] - 1, 0) },
+
    },
    mounted() {
       canvas = document.getElementById('hoverCanvas');
@@ -170,6 +184,20 @@ Ctrl + S: export analysis
       }, [offscreen])
    }
 })
+
+function safeFromDisplay(notation, str) {
+   if (notation.fromDisplay) try {
+      return notation.fromDisplay(str);
+   } catch (e) {
+      // fall through
+   }
+   if (notation.fromDisplay_alter) try {
+      return notation.fromDisplay_alter(str);
+   } catch (e) {
+      // fall through
+   }
+   return undefined;
+}
 
 const worker = new Worker("./Diagram.js")
 
@@ -183,6 +211,7 @@ worker.onmessage = (e) => {
    if (data.type === 'resize') {
       root.pCanvas.w = data.width
       root.pCanvas.h = data.height
+      root.pCanvas.s = data.scale
    }
 }
 
@@ -450,7 +479,6 @@ register.forEach((notation,index)=>{
             window.scrollTo({ top: targetScroll, behavior: 'smooth' });
 
             if (!this.inputVisited) {
-               console.log(target.value)
                this.inputVisited = true
                target.setSelectionRange(target.value.length, target.value.length);
             }
@@ -470,8 +498,8 @@ register.forEach((notation,index)=>{
                   root.showCanvas = true
 
                   let rect = this.$refs.input.getBoundingClientRect()
-                  root.pCanvas.x = rect.left + 5
-                  root.pCanvas.y = 105 + rect.bottom - rect.top
+                  root.pCanvas.x = rect.left + 5 + root.pCanvasModifier.x
+                  root.pCanvas.y = 105 + rect.bottom - rect.top + root.pCanvasModifier.y
                } else {
                   root.showCanvas = false
                }
@@ -495,6 +523,16 @@ register.forEach((notation,index)=>{
 
                let next = find_next(this.item, quick_level);
                if (next) node_map.get(next.path)?.$refs?.input?.focus({ preventScroll: true })
+            } else if (event.key === 'ArrowLeft' && event.ctrlKey) {
+               event.preventDefault()
+               let input = event.target
+               input.setSelectionRange(0, 0)
+               input.scrollLeft = 0
+            } else if (event.key === 'ArrowRight' && event.ctrlKey) {
+               event.preventDefault()
+               let input = event.target
+               input.setSelectionRange(input.value.length, input.value.length)
+               input.scrollLeft = input.scrollWidth - input.clientWidth
             } else if (event.key === 'Enter') {
                event.preventDefault()
                let tier = event.shiftKey ? 1 : root.tier[index]
@@ -510,7 +548,28 @@ register.forEach((notation,index)=>{
             } else if (event.key.toLowerCase() === 'h' && event.ctrlKey) {
                event.preventDefault()
 
-               this.item.hide_child = ! this.item.hide_child
+               this.item.hide_child = !this.item.hide_child
+            } else if (event.key.toLowerCase() === 'e' && event.ctrlKey) {
+               event.preventDefault()
+
+               let notation = analysis_register[this.current_analysis_index];
+               if (!notation) return;
+
+               root.analysis_fs_target = this.item.path
+               root.show_fs_dialog = true
+            } else if (event.altKey && ['w', 'a', 's', 'd'].includes(event.key.toLowerCase())) {
+               event.preventDefault()
+
+               let d_pos_list = [{y:50},{x:50},{y:-50},{x:-50}]
+               let d_pos = d_pos_list[['w','a','s','d'].indexOf(event.key.toLowerCase())]
+               root.pCanvas.x += d_pos.x || 0
+               root.pCanvasModifier.x += d_pos.x || 0
+               root.pCanvas.y += d_pos.y || 0
+               root.pCanvasModifier.y += d_pos.y || 0
+            } else if (event.key.toLowerCase() === 'h' && event.altKey) {
+               root.pCanvasModifier.hide = !root.pCanvasModifier.hide
+            } else if (event.key === 'Alt') {
+               event.preventDefault()
             }
          },
       },
@@ -544,6 +603,68 @@ register.forEach((notation,index)=>{
       mounted(){
       }
    })
+})
+
+app.component('fs-dialog', {
+   template: `
+    <div v-if="modelValue" class="fs-dialog-overlay" @click.self="handleCancel">
+      <div class="fs-dialog-container">
+        <h3 class="fs-dialog-title">input fs index</h3>
+        <input
+          ref="inputRef"
+          type="number"
+          v-model.number="inputValue"
+          step="1"
+          class="fs-dialog-input"
+          @keyup.enter="handleConfirm"
+        >
+        <div class="fs-dialog-buttons">
+          <button @click="handleCancel" class="fs-dialog-btn">cancel</button>
+          <button @click="handleConfirm" class="fs-dialog-btn fs-dialog-btn-primary">confirm</button>
+        </div>
+      </div>
+    </div>
+  `,
+   props: {
+      modelValue: false,
+      init: 0,
+   },
+   emits: ['update:modelValue', 'confirm', 'cancel'],
+   data() {
+      return {
+         inputValue: 0
+      }
+   },
+   watch: {
+      modelValue(newVal) {
+         if (newVal) {
+            this.inputValue = this.init
+            this.$nextTick(() => {
+               if (this.$refs.inputRef) {
+                  this.$refs.inputRef.focus()
+                  this.$refs.inputRef.select()
+               }
+            })
+         }
+      }
+   },
+   methods: {
+      handleConfirm() {
+         if (!Number.isInteger(this.inputValue)) {
+            alert('illegal input')
+            return
+         }
+         this.$emit('confirm', this.inputValue)
+         this.close()
+      },
+      handleCancel() {
+         this.$emit('cancel')
+         this.close()
+      },
+      close() {
+         this.$emit('update:modelValue', false)
+      }
+   }
 })
 
 const root=app.mount('#app')
