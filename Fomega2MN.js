@@ -1,5 +1,5 @@
 ;(()=>{
-   var entry_compare = (a,b)=>{//each entry = [value,separator] where separator is mountain
+      var entry_compare = (a,b)=>{//each entry = [value,separator] where separator is mountain
       if(a[0]<b[0]) return -1
       if(a[0]>b[0]) return 1
       return mountain_compare(a[1],b[1])
@@ -34,6 +34,11 @@
    ,mountain_is_one = m=> m.length===1 && m[0].length===0
    ,mountain_display = m=>m.map(column=>'('+column.map(([v,sep])=>{
       if(sep.every(column=>!column.length)) return ','.repeat(sep.length)+v
+      if(
+         mountain_display(sep.slice(0,2))===mountain_display([[],[[1,[[]]]]])
+         &&sep.slice(2).every(column=>!column.length)
+      )
+         return ';'+','.repeat(sep.length-2)+v
       return mountain_display(sep)+v
    }).join('')+')').join('')
    ,vertical_compare = (a,b)=>{//each vertical = [separator,separator,...,separator]
@@ -89,46 +94,57 @@
       }
       return ref
    }
-   ,subtract1 = (A0,V)=>{
+   ,subtract1 = (A0,V0)=>{
       var rightmost = A0.length-1
       var topmost = A0[rightmost].length-1
       var A = JSON.parse(JSON.stringify(A0))
+      var topright_value = A[rightmost][topmost][0]
       var topright_separator = A[rightmost][topmost][1]
-      var BRij = Parent(A,V,[rightmost,topmost])
+      var BRij = Parent(A,V0,[rightmost,topmost])
 
-      if(mountain_is_one(topright_separator)) A[rightmost].pop()
-      else if(mountain_is_limit(topright_separator)){
+      A[rightmost].pop()
+
+      if(mountain_is_limit(topright_separator)){
          var BRseparator = A[BRij[0]][BRij[1]-1]?.[1]??[]
-         ,i=-1,J
-         if(mountain_compare(BRseparator,topright_separator)<0){
-            while(mountain_compare(BRseparator,J=expand(topright_separator,i))>=0) ++i
-         }else{
-            J=expand(topright_separator,i)
-         }
+         ,J = mountain_compare(BRseparator,topright_separator)>=0 ? [[]] : BRseparator.concat([[]])
+
+         var alpha = V0[BRij[0]][BRij[1]-1]??[]
+         ,working_vertical = V0[rightmost][topmost-1]??[]
          if(
-            vertical_compare(V[BRij[0]][BRij[1]-1]??[],V[rightmost][topmost-1]??[])<0
-            &&mountain_compare(A[rightmost][topmost-1]?.[1]??[],J)>=0
-         )
-            A[rightmost].pop()
-         else
-            A[rightmost][topmost][1] = J
-      }else{
+            !(vertical_compare(alpha,working_vertical)<0
+            &&mountain_compare(A[rightmost][topmost-1]?.[1]??[],J)>=0)
+         ){
+            if(vertical_compare(alpha,working_vertical)>0){
+               var i = find_index_below_row(V0[BRij[0]],working_vertical)
+               while(vertical_compare(alpha,V0[BRij[0]][i-1]??[])>0){
+                  A[rightmost].push([topright_value,A[BRij[0]][i][1]])
+                  working_vertical = vertical_increase(working_vertical,A[BRij[0]][i][1])
+                  ++i
+               }
+            }
+            while(vertical_compare(vertical_increase(alpha,J),vertical_increase(working_vertical,J))) J = J.concat([[]])
+            A[rightmost].push([topright_value,J])
+         }
+      }else if(!mountain_is_one(topright_separator)){
          topright_separator = topright_separator.slice(0,-1)
-         if(vertical_compare(vertical_increase(V[BRij[0]][BRij[1]-1]??[],topright_separator),V[rightmost][topmost-1]??[])<=0)
-            A[rightmost].pop()
-         else
-            A[rightmost][topmost][1] = topright_separator
+
+         alpha = V0[BRij[0]][BRij[1]-1]??[]
+         working_vertical = V0[rightmost][topmost-1]??[]
+         if(vertical_compare(alpha,working_vertical)>0){
+            i = find_index_below_row(V0[BRij[0]],working_vertical)
+            while(vertical_compare(alpha,V0[BRij[0]][i-1]??[])>0){
+               A[rightmost].push([topright_value,A[BRij[0]][i][1]])
+               working_vertical = vertical_increase(working_vertical,A[BRij[0]][i][1])
+               ++i
+            }
+         }
+
+         if(!vertical_compare(alpha,working_vertical)) A[rightmost].push([topright_value,topright_separator])
       }
 
-      A[rightmost] = A[rightmost].concat(A[BRij[0]].slice(BRij[1]))
       return A
    }
-   ,data=new Map()
-   ,extend = (A0,B0)=>{
-      var datakey = B0?mountain_display(A0)+'"'+mountain_display(B0):mountain_display(A0)
-      var mapval = data.get(datakey)
-      if(mapval) return mapval
-
+   ,extend = (A0,small=false)=>{
       var rightmost = A0.length-1
       var topmost = A0[rightmost].length-1
       var V0 = A0.map(column_verticals)
@@ -140,15 +156,14 @@
       var topverticals = V0[BRij[0]].slice(0,BRij[1])
       topverticals.push(V0[rightmost][topmost])
       var width = rightmost - BRij[0]
-      if(B0){
-         var c=0
-         while(A0[c]&&B0[c]&&!column_compare(A0[c],B0[c])) ++c
-         if(c <= BRij[0]) return [A0,B0]
-      }
       var magma_checkss = []
-      for(var i=BRij[0]+1;i<=rightmost;++i){
+      for(var i=BRij[0];i<=rightmost;++i){
          magma_checkss[i] = []
          for(var j=0;j<A0[i].length;++j){
+            if(i===BRij[0]){
+               magma_checkss[i][j] = -1
+               continue
+            }
             var working = [i,j]
             while(working[0]>BRij[0]){
                if(A0[working[0]].length<=working[1]) --working[1]
@@ -159,61 +174,42 @@
             ) ? working[1] : -1
          }
       }
-      if(B0){
-         var VB = B0.map(column_verticals)
-         var magma_append = []
-         for(i=c;i<B0.length;++i){
-            magma_append[i] = []
-            for(j=0;j<B0[i].length;++j){
-               working = [i,j]
-               while(working[0]>BRij[0]&&B0[working[0]].length){
-                  if(B0[working[0]].length<=working[1]) --working[1]
-                  working = Parent(B0,VB,working)
-               }
-               magma_append[i][j] = (
-                  working[0]===BRij[0] && working[1]<=BRij[1] && !vertical_compare(VB[working[0]][working[1]-1]??[],VB[i][j-1]??[])
-               ) ? working[1] : -1
-            }
-         }
-      }
 
       var A = subtract1(A0,V0)
       var refs = get_references(A,topverticals)
       var ref_separators = refs.map(r=>A[rightmost][r-1]?.[1]??[])
       refs[-1] = -1
 
-      var stretch_threshold=[],stretch_pre=[],stretch_value=[]
+      var stretch_threshold=[],stretch_value=[]
       for(i=0;i<top_separators.length;++i){
          if(!mountain_is_limit(top_separators[i])){
-            stretch_pre[i]=0
             stretch_value[i]=0
             continue
          }
-         var k0=-1
-         if(mountain_compare(BR_separators[i],top_separators[i])<0){
-            while(mountain_compare(BR_separators[i],expand(top_separators[i],k0))>=0) ++k0
+         if(mountain_compare(BR_separators[i],top_separators[i])>=0){
+            stretch_threshold[i]=[[]]
+         }else{
+            stretch_threshold[i]=BR_separators[i].concat([[]])
          }
-         stretch_threshold[i]=expand(top_separators[i],k0)
-         stretch_pre[i]=k0+1
          if(refs[i]-refs[i-1]===1){
             stretch_value[i]=0
             continue
          }
          if(mountain_compare(top_separators[i],ref_separators[i])>0&&mountain_compare(ref_separators[i],stretch_threshold[i])>=0){
-            var k=k0
-            while(mountain_compare(ref_separators[i],expand(top_separators[i],k))>=0) ++k
-            stretch_value[i]=k-k0
+            stretch_value[i]=ref_separators[i].length-stretch_threshold[i].length+1
          }else{
             stretch_value[i]=0
          }
       }
 
-      for(var dx=1;dx<=width;++dx){
+      for(var dx=0;dx<=(small?0:width);++dx){
          var x = BRij[0]+dx
          var source_magmas = magma_checkss[x]
-         var target_column = A[x+width] = []
-         var BRindex = -1
+         if(dx) A[x+width] = []
+         var target_column = A[x+width]
+         var BRindex = dx?-1:ref_separators.length-1
          A0[x].forEach((entry,y)=>{
+            if(!dx&&y<BRij[1]) return;
             var value = entry[0]
             if(~source_magmas[y]){
                BRindex = source_magmas[y]
@@ -225,7 +221,7 @@
                         mountain_compare(entry[1],top_separators[BRindex])>=0||
                         mountain_compare(entry[1],stretch_threshold[BRindex])<0 ?
                         entry[1] :
-                        multi_extend(top_separators[BRindex],entry[1],stretch_pre[BRindex],stretch_value[BRindex])
+                        entry[1].concat(Array(stretch_value[BRindex]).fill([]))
                      ])
                   else target_column.push([value+width,A[BRij[0]+width][j][1]])
                }
@@ -236,69 +232,21 @@
                   mountain_compare(entry[1],top_separators[BRindex])>=0||
                   mountain_compare(entry[1],stretch_threshold[BRindex])<0 ?
                   entry[1] :
-                  multi_extend(top_separators[BRindex],entry[1],stretch_pre[BRindex],stretch_value[BRindex])
+                  entry[1].concat(Array(stretch_value[BRindex]).fill([]))
                ])
             }
          })
       }
-      if(B0){
-         var B = A.slice(0,c+width)
-         for(x=c;x<B0.length;++x){
-            source_magmas = magma_append[x]
-            target_column = B[x+width] = []
-            BRindex = -1
-            B0[x].forEach((entry,y)=>{
-               var value = entry[0]
-               if(~source_magmas[y]){
-                  BRindex = source_magmas[y]
-                  for(var j=refs[BRindex-1]+1;j<=refs[BRindex];++j){
-                     if(j===refs[BRindex])
-                        target_column.push([
-                           value+width,
-                           !stretch_value[BRindex]||
-                           mountain_compare(entry[1],top_separators[BRindex])>=0||
-                           mountain_compare(entry[1],stretch_threshold[BRindex])<0 ?
-                           entry[1] :
-                           multi_extend(top_separators[BRindex],entry[1],stretch_pre[BRindex],stretch_value[BRindex])
-                        ])
-                     else target_column.push([value+width,A[BRij[0]+width][j][1]])
-                  }
-               }else{
-                  target_column.push([
-                     value + (value>BRij[0] ? width :0),
-                     !stretch_value[BRindex]||
-                     mountain_compare(entry[1],top_separators[BRindex])>=0||
-                     mountain_compare(entry[1],stretch_threshold[BRindex])<0 ?
-                     entry[1] :
-                     multi_extend(top_separators[BRindex],entry[1],stretch_pre[BRindex],stretch_value[BRindex])
-                  ])
-               }
-            })
-         }
-      }
-      data.set(datakey,B0?[A,B]:A)
-      return B0?[A,B]:A
-   }
-   ,multi_extend = (A0,B0,pre,n)=>{
-      for(var i=1,A=A0;i<=pre;++i) A = extend(A)
-      for(var i=1,AB=[A,B0];i<=n;++i) AB = extend(AB[0],AB[1])
-      return AB[1]
+      return A
    }
    ,expand = (A0,FSterm,shorter=false)=>{
-      if(FSterm===-1){
-         var rightmost = A0.length-1
-         var topmost = A0[rightmost].length-1
-         var BRij = Parent(A0,A0.map(column_verticals),[rightmost,topmost])
-         return JSON.parse(JSON.stringify(A0.slice(0,BRij[0]+(1-shorter))))
-      }
       for(var A=A0,n=1;n<=FSterm;++n) A = extend(A)
-      return shorter ? A.slice(0,-1) : subtract1(A,A.map(column_verticals))
+      return shorter ? A.slice(0,-1) : extend(A,true)
    }
-   ,LimitColumn = (i,n)=>n?LimitColumn(i,n-1).concat([[i,Limit(n-1)]]):[]
-   ,Limit = i=>i?Limit(i-1).concat([LimitColumn(i,i)]):[[]]
+   ,Limit = n=>[[],[[1,[[],[[1,[[]]]]].concat(Array(n).fill(0).map(()=>[]))]]]
    register.push({
-      id:'td-omega-pow-omega-mn'
-      ,name:'Transfinite Dω^ωMN'
+      id:'f-omega2-mn'
+      ,name:'Full ω·2MN'
       ,display:expr=>''+expr==='Infinity'?'Limit':mountain_display(expr)
       ,able:mountain_is_limit
       ,compare:mountain_compare
