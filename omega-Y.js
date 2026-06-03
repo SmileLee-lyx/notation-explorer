@@ -248,33 +248,34 @@
       }
       let y_list = Array.from(y_set).map(y_str => y_str.split(',').filter(x => x.length).map(x => parseInt(x, 10)))
       y_list.sort(vertical_compare)
-      let py_list = [-100]
+      let py_list = [-150]
       let line_list = []
       for (let i = 1; i < y_list.length; i++) {
          let diff = dimension_difference(y_list[i-1], y_list[i])
-         py_list[i] = py_list[i-1] + (diff === 0 ? 200 : 400 + diff * 60)
-         for (let j = 0; j < diff; ++j) line_list.push(py_list[i-1] + 200 + 30 * (2 * j + 1))
+         py_list[i] = py_list[i-1] + (diff === 0 ? 300 : 600 + diff * 60)
+         for (let j = 0; j < diff; ++j) line_list.push(py_list[i-1] + 300 + 30 * (2 * j + 1))
       }
-      let total_width = seq.length * 200
-      let total_height = py_list[py_list.length-1] + 100
+      let total_width = seq.length * 300
+      let total_height = py_list[py_list.length-1] + 150
       let py_map = new Map()
       for (let i = 1; i < py_list.length; i++) py_map.set(y_list[i].join(","), total_height - py_list[i])
 
       let result = {
-         width: total_width + 500,
-         height: total_height + 500,
-         actions: [
-            { type: 'lineWidth', value: 15 },
-            { type: 'strokeStyle', value: 'black' },
-            { type: 'font', size: 120, font: 'Consolas' },
-            { type: 'fillStyle', value: 'white' },
-            { type: 'fillRect', value: { x: 0, y: 0, w: total_width, h: total_height } },
-            { type: 'strokeRect', value: { x: 0, y: 0, w: total_width, h: total_height } },
-            { type: 'fillStyle', value: 'black' },
+         width: total_width,
+         height: total_height,
+         lineWidth: 15,
+         fillColor: { r: 0, g: 0, b: 0 },
+         lineColor: { r: 0, g: 0, b: 0 },
+         text: { size: 120, font: 'Consolas' },
+         elements: [
+            {
+               type: 'rect', value: { x: 0, y: 0, w: total_width, h: total_height }, fill: true, border: true,
+               fillColor: { r: 255, g: 255, b: 255 },
+            },
          ]
       }
       for (let line of line_list) {
-         result.actions.push({
+         result.elements.push({
             type: 'line',
             start: { x: 0, y: total_height - line },
             end: { x: total_width, y: total_height - line }
@@ -286,26 +287,26 @@
             if (entry.y.length === 0) continue
             let py = py_map.get(entry.y.join(","))
 
-            result.actions.push({
+            result.elements.push({
                type: 'text',
                value: "" + entry.value,
-               pos: { x: 200 * entry.x + 100, y: py + 40 },
+               pos: { x: 300 * entry.x + 150, y: py + 40 },
                h_center: true
             })
 
             let parent_entry = entry.leftleg_down
             if (parent_entry && parent_entry.y.length > 0) {
                let parent_py = py_map.get(parent_entry.y.join(","))
-               result.actions.push({
+               result.elements.push({
                   type: 'line',
-                  start: { x: 200 * entry.x + 100, y: py + 60 },
-                  end: { x: 200 * parent_entry.x + 100, y: py + 140 }
+                  start: { x: 300 * entry.x + 150, y: py + 80 },
+                  end: { x: 300 * parent_entry.x + 150, y: py + 220 }
                })
-               if (parent_py - py > 200) {
-                  result.actions.push({
+               if (parent_py - py > 300) {
+                  result.elements.push({
                      type: 'line',
-                     start: { x: 200 * parent_entry.x + 100, y: py + 140 },
-                     end: { x: 200 * parent_entry.x + 100, y: parent_py - 60 }
+                     start: { x: 300 * parent_entry.x + 150, y: py + 220 },
+                     end: { x: 300 * parent_entry.x + 150, y: parent_py - 80 }
                   })
                }
             }
@@ -313,10 +314,10 @@
             let super_entry = entry.rightleg_down
             if (super_entry && super_entry.y.length > 0) {
                let super_py = py_map.get(super_entry.y.join(","))
-               result.actions.push({
+               result.elements.push({
                   type: 'line',
-                  start: { x: 200 * entry.x + 100, y: py + 60 },
-                  end: { x: 200 * entry.x + 100, y: super_py - 60 }
+                  start: { x: 300 * entry.x + 150, y: py + 80 },
+                  end: { x: 300 * entry.x + 150, y: super_py - 80 }
                })
             }
          }

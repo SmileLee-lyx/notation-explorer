@@ -241,26 +241,45 @@
    }
    ,Limit_row = n=>Array(3+n).fill(0).map((x,nn)=>3<=nn&&nn<2+n?[nn,true]:[nn]).concat(2).reverse()
    ,Limit = n=>[[1,[1],[0]],[1,[2],[1],[0]]].concat(Array(n).fill(0).map((x,nn)=>Limit_row(1+nn)))
-   ,drawDiagram = (expr) => {
+
+   function drawDiagram(expr, diagramControlData) {
       if (''+expr==='Infinity') {
          return undefined
       }
 
-      let width = expr.length * 200 + 400;
+      let width = expr.length * 200 + 200;
       let height = expr.length * 200 + 150;
       let result = {
-         width: width,
-         height: height,
-         actions: [
-            { type: 'lineWidth', value: 15 },
-            { type: 'strokeStyle', value: 'black' },
-            { type: 'font', size: 120, font: 'Consolas' },
-            { type: 'fillStyle', value: 'white' },
-            { type: 'fillRect', value: { x: 0, y: 0, w: width, h: height } },
-            { type: 'strokeRect', value: { x: 0, y: 0, w: width, h: height } },
-            { type: 'fillStyle', value: 'black' },
+         width, height,
+         lineWidth: 15,
+         lineColor: { r: 0, g: 0, b: 0 },
+         fillColor: { r: 0, g: 0, b: 0 },
+         text: { size: 120, font: 'Consolas' },
+         elements: [
+            {
+               type: 'rect', value: { x: 0, y: 0, w: width, h: height }, fill: true, border: true,
+               fillColor: { r: 255, g: 255, b: 255 },
+            },
          ]
       }
+
+      if (diagramControlData) {
+         result.elements.push({
+            type: 'rect', value: { x: 10, y: 200 * diagramControlData.index + 10, w: width - 20, h: 180, },
+            fill: true, fillColor: { r: 240, g: 240, b: 240 },
+         })
+      }
+
+      for (let i = 0; i <= expr.length; ++i) {
+         result.elements.push({
+            type: 'line', lineColor: i % 5 === 0 ? { r: 192, g: 192, b: 192 } : { r: 240, g: 240, b: 240 },
+            start: { x: i * 200 + 100, y: Math.max(i - 1, 0) * 200 + 100 },
+            end: { x: i * 200 + 100, y: expr.length * 200 },
+         })
+      }
+
+      let circles = []
+      let lines = []
 
       for (let i = 0; i < expr.length; ++i) {
          let row = expr[i]
@@ -271,33 +290,32 @@
             let pos = row[j][0];
             let mark = row[j][1];
 
-            result.actions.push({
+            circles.push({
                type: 'circle',
-               center: { x: pos * 200 + 100, y: i * 200 + 100 },
-               radius: 50,
-               fill: mark
+               value: { x: pos * 200 + 100, y: i * 200 + 100, r: 50 },
+               lineColor: j === 1 + row[0] ? { r: 255, g: 0, b: 0 } : undefined,
+               fillColor: mark ? undefined : { r: 255, g: 255, b: 255 },
+               fill: true, border: true,
+               blink: i === diagramControlData?.index
             })
 
             if (prev !== undefined) {
-               result.actions.push({
+               lines.push({
                   type: 'line',
-                  start: { x: pos * 200 + 150, y: i * 200 + 100 },
-                  end: { x: prev * 200 + 50, y: i * 200 + 100}
+                  start: { x: pos * 200 + 100, y: i * 200 + 100 },
+                  end: { x: prev * 200 + 100, y: i * 200 + 100},
+                  blink: i === diagramControlData?.index,
                })
             }
 
             prev = pos
          }
-
-         result.actions.push({
-            type: 'text',
-            value: "" + row[0],
-            pos: { x: i * 200 + 400, y: i * 200 + 150}
-         })
       }
 
+      result.elements.push(...lines, ...circles)
+
       for (let i = 0; i <= expr.length; ++i) {
-         result.actions.push({
+         result.elements.push({
             type: 'text',
             value: "" + i,
             pos: { x: i * 200 + 100, y: expr.length * 200 + 100 },
@@ -307,6 +325,36 @@
 
       return result
    }
+
+   let diagramControl = {
+      onmousemove(expr, pos, previousControlData) {
+         let index = Math.floor(pos.y / 200)
+         if (previousControlData && previousControlData.index === index) return undefined
+         if (!(index >= 0 && index < expr.length)) return undefined
+         return {
+            type: 'update',
+            value: {
+               id: display(expr) + '#' + index,
+               index,
+            }
+         }
+      },
+      onclick(expr, pos) {
+         let index = Math.floor(pos.y / 200)
+         if (!(index >= 0 && index < expr.length)) return undefined
+         return {
+            type: 'navigate',
+            target: expr.slice(0, index + 1)
+         }
+      },
+      onkeydown(expr, pos, previousControlData) {
+         return {
+            type: 'update',
+            value: JSON.parse(JSON.stringify(previousControlData))
+         }
+      }
+   }
+
    register.push({
       id:'den2'
       ,name:'DEN2'
@@ -344,6 +392,6 @@
          {expr:[Infinity],low:[[]],subitems:[]}
          ,{expr:[],low:[[]],subitems:[]}
       ])
-      ,drawDiagram
+      ,drawDiagram, diagramControl
    })
 })()

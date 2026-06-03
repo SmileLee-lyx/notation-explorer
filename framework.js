@@ -32,14 +32,19 @@ const app = Vue.createApp({
       tier:register.map(()=>0),
       length_limit:20,
       datasets:register.map(init_dataset),
+
       pCanvas: { x:0, y:0, w:0, h:0, s:1 },
       pCanvasModifier: { x:0, y:0, hide:false },
-      showCanvas:false,
+      hasCanvas:false,
+      interactingCanvas:false,
+      diagramControlData:undefined,
+
+      show_input:true,
       diagram_follow:false,
       diagram_scale:0,
       use_alternative:true,
       show_fs_dialog:false,
-      analysis_fs_target:undefined,
+      active_node_path:undefined,
    }),
    computed:{
       current_notation_name() { return register[this.current_tab].id },
@@ -54,7 +59,11 @@ const app = Vue.createApp({
       pCanvasScaled() {
          let scale = 0.1 / this.pCanvas.s * Math.pow(1.25, this.diagram_scale)
          return { w: this.pCanvas.w * scale, h: this.pCanvas.h * scale }
-      }
+      },
+
+      showCanvas(){
+         return this.interactingCanvas || this.hasCanvas
+      },
    },
    methods:{
       show_hotkeys() {
@@ -143,12 +152,14 @@ Ctrl + E: expand analysis fundamental sequence
 
          event.target.value = '';
       },
-      find_notation() {
+      find_notation(expr) {
          let notation = register[this.current_tab]
-         let displayed_expr = this.$refs.navigate_input.value
-         let expr = safeFromDisplay(notation, displayed_expr)
-         if (expr === undefined) return;
-         import_analysis(this.datasets[this.current_tab], [[expr]], notation, this.use_alternative, true)
+         if (!expr) {
+            let displayed_expr = this.$refs.navigate_input.value
+            expr = safeFromDisplay(notation, displayed_expr)
+         }
+         if (expr === undefined) return 0;
+         return import_analysis(this.datasets[this.current_tab], [[expr]], notation, this.use_alternative, true)
       },
       navigate_keydown(event) {
          if (event.key === 'Enter') {
@@ -157,7 +168,7 @@ Ctrl + E: expand analysis fundamental sequence
          }
       },
       calc_analysis_fs(fsIndex) {
-         let node = node_map.get(this.analysis_fs_target);
+         let node = node_map.get(this.active_node_path);
          let target = node?.$refs?.input
          if (!target) return;
          let notation = analysis_register[this.current_analysis_index];
@@ -173,6 +184,81 @@ Ctrl + E: expand analysis fundamental sequence
       incrFS() { this.FS_shown[this.current_tab]++ },
       decrFS() { this.FS_shown[this.current_tab] = Math.max(this.FS_shown[this.current_tab] - 1, 0) },
 
+      canvas_on_mousemove(e) {
+         let notation = register[this.current_tab]
+         if (!notation.diagramControl) return;
+
+         let node = node_map.get(this.active_node_path);
+         if (!node) return;
+
+         let pos = {
+            x: (e.clientX - e.target.getBoundingClientRect().left) / root.pCanvasScaled.w * root.pCanvas.w / root.pCanvas.s,
+            y: (e.clientY - e.target.getBoundingClientRect().top) / root.pCanvasScaled.h * root.pCanvas.h / root.pCanvas.s,
+         }
+
+         let expr = node.item.expr
+         
+         let previousControlData = root.diagramControlData
+         let command = notation.diagramControl.onmousemove(expr, pos, previousControlData)
+         this.handle_diagram_control(command, expr)
+      },
+      canvas_on_click(e) {
+         root.diagramControlData = undefined;
+
+         let notation = register[this.current_tab]
+         if (!notation.diagramControl) return;
+
+         let node = node_map.get(this.active_node_path);
+         if (!node) return;
+
+         let pos = {
+            x: (e.clientX - e.target.getBoundingClientRect().left) / root.pCanvasScaled.w * root.pCanvas.w / root.pCanvas.s,
+            y: (e.clientY - e.target.getBoundingClientRect().top) / root.pCanvasScaled.h * root.pCanvas.h / root.pCanvas.s,
+         }
+
+         let expr = node.item.expr
+
+         let previousControlData = root.diagramControlData
+         let command = notation.diagramControl.onclick(expr, pos, previousControlData)
+         this.handle_diagram_control(command, expr)
+      },
+      canvas_on_mousedown(e) {
+         this.interactingCanvas = true
+      },
+      
+      handle_diagram_control(command, expr) {
+         if (command === undefined) return;
+         
+         if (Array.isArray(command)) {
+            for (let c of command) {
+               this.handle_diagram_control(c, expr)
+            }
+            return;
+         }
+         
+         let notation = register[this.current_tab]
+         
+         switch (command.type) {
+            case 'navigate':
+               this.find_notation(command.target);
+               break;
+            case 'update':
+               let diagramControlData = command.value;
+               if (diagramControlData !== undefined) {
+                  root.diagramControlData = diagramControlData;
+
+                  let diagram = notation.drawDiagram(expr, diagramControlData);
+                  if (diagram != null) {
+                     worker.postMessage({
+                        type: 'render',
+                        diagram,
+                        taskId: diagramControlData.id,
+                     })
+                  }
+               }
+               break;
+         }
+      }
    },
    mounted() {
       canvas = document.getElementById('hoverCanvas');
@@ -182,8 +268,38 @@ Ctrl + E: expand analysis fundamental sequence
          type: "init",
          canvas: offscreen
       }, [offscreen])
-   }
+
+      document.addEventListener('click', e => {
+         this.interactingCanvas = false;
+         this.diagramControlData = undefined;
+      })
+
+      document.addEventListener('keydown', event => {
+         if (event.key === 'r' && event.ctrlKey) {
+            event.preventDefault()
+            node_map.get(this.active_node_path)?.$refs?.input?.focus()
+         }
+      })
+   },
+   watch: {
+   },
 })
+
+const worker = new Worker("./Diagram.js")
+
+let canvas
+
+worker.onmessage = (e) => {
+   let data = e.data
+   if (data.type === 'alert') {
+      console.log(data.value)
+   }
+   if (data.type === 'resize') {
+      if (root.pCanvas.w !== data.width) root.pCanvas.w = data.width
+      if (root.pCanvas.h !== data.height) root.pCanvas.h = data.height
+      if (root.pCanvas.s !== data.scale) root.pCanvas.s = data.scale
+   }
+}
 
 function safeFromDisplay(notation, str) {
    if (notation.fromDisplay) try {
@@ -199,22 +315,6 @@ function safeFromDisplay(notation, str) {
    return undefined;
 }
 
-const worker = new Worker("./Diagram.js")
-
-let canvas
-
-worker.onmessage = (e) => {
-   let data = e.data
-   if (data.type === 'alert') {
-      console.log(data.value)
-   }
-   if (data.type === 'resize') {
-      root.pCanvas.w = data.width
-      root.pCanvas.h = data.height
-      root.pCanvas.s = data.scale
-   }
-}
-
 function import_analysis(root_item, analysis_list, notation, use_short, auto_focus = false) {
    let item = last_child(root_item)
    let index = 0
@@ -224,7 +324,7 @@ function import_analysis(root_item, analysis_list, notation, use_short, auto_foc
       let flag = false
       while ((cmp = notation.compare(item.expr, analysis_list[index][0])) !== 0) {
          if (cmp > 0) {
-            if (item.mark > root.length_limit) return
+            if (item.mark > root.length_limit) return index
             expand_item(item, notation, use_short, 0)
             item = find_next(item)
          } else {
@@ -241,6 +341,7 @@ function import_analysis(root_item, analysis_list, notation, use_short, auto_foc
 
       ++index
    }
+   return index
 }
 
 function expand_item(item, notation, use_short, max_tier, auto_focus) {
@@ -434,7 +535,9 @@ register.forEach((notation,index)=>{
                   })
                }
 
-               root.showCanvas = true
+               root.diagramControlData = undefined;
+               root.hasCanvas = true
+
                root.pCanvas.x = event.clientX + 100
                root.pCanvas.y = event.clientY + 15
             }
@@ -455,7 +558,7 @@ register.forEach((notation,index)=>{
          },
          onmouseleave(event){
             if (root.diagram_follow) {
-               root.showCanvas = false
+               root.hasCanvas = false
             }
 
             this.tooltip = false
@@ -466,13 +569,17 @@ register.forEach((notation,index)=>{
                expand_item(this.item, this.notation, root.use_alternative, root.tier[index])
             } else if (event.button === 2) {
                console.log(this.notation, this.item)
+               window.notation = notation
+               window.expr = this.item.expr
             }
          },
          onfocus(event) {
-            /** @type {HTMLInputElement} */
             const target = event.target;
             const rect = target.getBoundingClientRect();
             const currentScroll = window.scrollY;
+
+            root.active_node_path = this.item.path
+            root.interactingCanvas = false
 
             const targetScroll = rect.top + currentScroll - 100;
 
@@ -495,20 +602,28 @@ register.forEach((notation,index)=>{
                      taskId: this.notation.display(this.item.expr)
                   })
 
-                  root.showCanvas = true
+                  root.diagramControlData = undefined;
+                  root.hasCanvas = true
 
                   let rect = this.$refs.input.getBoundingClientRect()
                   root.pCanvas.x = rect.left + 5 + root.pCanvasModifier.x
                   root.pCanvas.y = 105 + rect.bottom - rect.top + root.pCanvasModifier.y
                } else {
-                  root.showCanvas = false
+                  root.hasCanvas = false
                }
             }
          },
          onblur(event){
-            root.showCanvas = false
+            root.hasCanvas = false
          },
          onkeydown(event) {
+            if (event.ctrlKey || event.altKey) {
+               let useDefault = false
+               if (event.ctrlKey && ['c', 'v', 'a', 'x'].includes(event.key.toLowerCase())) {
+                  useDefault = true
+               }
+               if (!useDefault) event.preventDefault()
+            }
             if (event.key === 'ArrowUp') {
                event.preventDefault()
 
@@ -524,12 +639,10 @@ register.forEach((notation,index)=>{
                let next = find_next(this.item, quick_level);
                if (next) node_map.get(next.path)?.$refs?.input?.focus({ preventScroll: true })
             } else if (event.key === 'ArrowLeft' && event.ctrlKey) {
-               event.preventDefault()
                let input = event.target
                input.setSelectionRange(0, 0)
                input.scrollLeft = 0
             } else if (event.key === 'ArrowRight' && event.ctrlKey) {
-               event.preventDefault()
                let input = event.target
                input.setSelectionRange(input.value.length, input.value.length)
                input.scrollLeft = input.scrollWidth - input.clientWidth
@@ -542,24 +655,16 @@ register.forEach((notation,index)=>{
                event.preventDefault()
                delete this.item.analysis
             } else if (event.key.toLowerCase() === 's' && event.ctrlKey) {
-               event.preventDefault()
-
                root.export_xlsx()
             } else if (event.key.toLowerCase() === 'h' && event.ctrlKey) {
-               event.preventDefault()
-
                this.item.hide_child = !this.item.hide_child
             } else if (event.key.toLowerCase() === 'e' && event.ctrlKey) {
-               event.preventDefault()
-
-               let notation = analysis_register[this.current_analysis_index];
+               let notation = analysis_register[root.current_analysis_index];
                if (!notation) return;
 
-               root.analysis_fs_target = this.item.path
+               root.active_node_path = this.item.path
                root.show_fs_dialog = true
             } else if (event.altKey && ['w', 'a', 's', 'd'].includes(event.key.toLowerCase())) {
-               event.preventDefault()
-
                let d_pos_list = [{y:50},{x:50},{y:-50},{x:-50}]
                let d_pos = d_pos_list[['w','a','s','d'].indexOf(event.key.toLowerCase())]
                root.pCanvas.x += d_pos.x || 0
@@ -572,6 +677,9 @@ register.forEach((notation,index)=>{
                event.preventDefault()
             }
          },
+      },
+      computed: {
+         show_input() { return this.$root.show_input },
       },
       mounted() {
          node_map.set(this.item.path, this)
@@ -586,7 +694,7 @@ register.forEach((notation,index)=>{
       },
       template:`<li><div class="shown-item" :class="{analyzed: item.analysis !== undefined}" @mouseenter="onmouseenter" @mousemove="onmousemove" @mouseleave="onmouseleave" @mousedown="onmousedown">
             <input type="checkbox" v-model="item.hide_child" @mousedown.stop>
-            <input type="text" @mousedown.stop @keydown.stop="onkeydown" ref="input" @focus="onfocus" @blur="onblur" v-model="item.analysis"/>
+            <input type="text" v-show="show_input" @mousedown.stop @keydown.stop="onkeydown" ref="input" @focus="onfocus" @blur="onblur" v-model="item.analysis"/>
             <span v-html="notation.display(item.expr)"></span>
             <div class="tooltip" v-if="tooltip" :style="tooltipX" @mousedown.stop>
             <span v-html="notation.display(item.expr)"></span> fundamental sequence:

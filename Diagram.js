@@ -28,18 +28,54 @@ function initCanvas(offscreenCanvas) {
    ctx = canvas.getContext("2d")
 }
 
+function clamp255(x) {
+   if (!Number.isFinite(x)) return 0
+   return Math.max(0, Math.min(255, x));
+}
+
+function rgbToCss(c) {
+   const r = clamp255(Math.round(c.r));
+   const g = clamp255(Math.round(c.g));
+   const b = clamp255(Math.round(c.b));
+   return `rgb(${r}, ${g}, ${b})`;
+}
+
+function lerp(a, b, t) {
+   return a + (b - a) * t;
+}
+
+function lerpColor(c1, c2, t) {
+   return {
+      r: lerp(c1.r, c2.r, t),
+      g: lerp(c1.g, c2.g, t),
+      b: lerp(c1.b, c2.b, t),
+   };
+}
+
+const white = { r: 255, g: 255, b: 255 };
+const black = { r: 0, g: 0, b: 0 };
+
+function setStyle(style, scale) {
+   if (style.fillColor) ctx.fillStyle = rgbToCss(style.fillColor)
+   if (style.lineColor) ctx.strokeStyle = rgbToCss(style.lineColor)
+   if (style.lineWidth) ctx.lineWidth = style.lineWidth * scale
+   if (style.text) {
+      ctx.font = Math.floor(style.text.size * scale) + "px " + style.text.font
+   }
+}
+
 function renderDiagram(diagram, taskId) {
    if (!ctx) return
 
    if (currentTaskId === taskId) return;
    currentTaskId = taskId
 
-   let size = Math.max(diagram.width, diagram.height)
+   let size = diagram.width * diagram.height
    let scale = 1
-   while (size > 2000) { size /= 2; scale /= 2; }
+   while (size > 4000000) { size /= 4; scale /= 2; }
 
-   canvas.width = diagram.width * scale
-   canvas.height = diagram.height * scale
+   if (canvas.width !== diagram.width * scale) canvas.width = diagram.width * scale;
+   if (canvas.height !== diagram.height * scale) canvas.height = diagram.height * scale;
 
    self.postMessage({
       type: 'resize',
@@ -48,89 +84,90 @@ function renderDiagram(diagram, taskId) {
       scale: scale,
    })
 
+   let style = diagram
+
    ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-   const actions = diagram.actions
-   let i = 0
+   const elements = diagram.elements
 
    function step() {
       if (taskId !== currentTaskId) return
 
-      const batchSize = 40
-      let count = 0
-
-      while (i < actions.length && count < batchSize) {
-         drawAction(actions[i], scale)
-         i++
-         count++
+      for (let element of elements) {
+         drawElement(element, style, scale)
       }
 
-      if (i < actions.length) {
-         requestAnimationFrame(step)
-      } else {
-         self.postMessage({
-            type: 'done',
-         })
-      }
+      requestAnimationFrame(step)
    }
 
-   requestAnimationFrame(step)
-
+   step()
 }
 
-function drawAction(action, scale) {
-   switch (action.type) {
+function drawElement(element, style, scale) {
+   switch (element.type) {
       case "circle":
-         drawCircle(action, scale)
+         drawCircle(element, style, scale)
          break;
       case "line":
-         drawLine(action, scale)
+         drawLine(element, style, scale)
          break;
-      case "font":
-         ctx.font = (action.size * scale) + 'px ' + action.font;
-         break
-      case "lineWidth":
-         ctx.lineWidth = action.value * scale
-         break
-      case "fillStyle":
-         ctx.fillStyle = action.value
-         break
-      case "strokeStyle":
-         ctx.strokeStyle = action.value
-         break
-      case "fillRect":
-         ctx.fillRect(action.value.x * scale, action.value.y * scale, action.value.w * scale, action.value.h * scale)
-         break
-      case "strokeRect":
-         ctx.strokeRect(action.value.x * scale, action.value.y * scale, action.value.w * scale, action.value.h * scale)
-         break
-      case "clearRect":
-         ctx.clearRect(action.value.x * scale, action.value.y * scale, action.value.w * scale, action.value.h * scale)
-         break
+      case "rect":
+         drawRect(element, style, scale);
+         break;
       case "text":
-         drawText(action, scale);
+         drawText(element, style, scale);
+         break;
    }
 }
 
-function drawCircle(a, scale) {
+function setBlinkStyle(element, style, scale) {
+   setStyle(style, scale);
+   setStyle(element, scale);
+   if (element.blink) {
+      let phase = Math.sin((Date.now() % 2000) / 1000 * Math.PI) * 0.25 + 0.5
+
+      let result = {
+         lineColor: lerpColor(element.lineColor || style.lineColor || black, white, phase),
+         fillColor: lerpColor(element.fillColor || style.fillColor || black, white, phase),
+      }
+      setStyle(result, scale)
+   }
+}
+
+function drawCircle(element, style, scale) {
+   setBlinkStyle(element, style, scale);
+
    ctx.beginPath()
-   ctx.arc(a.center.x * scale, a.center.y * scale, a.radius * scale, 0, Math.PI * 2)
-   if (a.fill)
+   ctx.arc(element.value.x * scale, element.value.y * scale, element.value.r * scale, 0, Math.PI * 2)
+   if (element.fill)
       ctx.fill()
-   ctx.stroke()
+   if (element.border)
+      ctx.stroke()
 }
 
-function drawLine(a, scale) {
+function drawLine(element, style, scale) {
+   setBlinkStyle(element, style, scale);
+
    ctx.beginPath()
-   ctx.moveTo(a.start.x * scale, a.start.y * scale)
-   ctx.lineTo(a.end.x * scale, a.end.y * scale)
+   ctx.moveTo(element.start.x * scale, element.start.y * scale)
+   ctx.lineTo(element.end.x * scale, element.end.y * scale)
    ctx.stroke()
 }
 
-function drawText(action, scale) {
+function drawRect(element, style, scale) {
+   setBlinkStyle(element, style, scale);
+
+   let scaledValue = { x: element.value.x * scale, y: element.value.y * scale, w: element.value.w * scale, h: element.value.h * scale };
+   if (element.fill) ctx.fillRect(scaledValue.x, scaledValue.y, scaledValue.w, scaledValue.h);
+   if (element.border) ctx.strokeRect(scaledValue.x, scaledValue.y, scaledValue.w, scaledValue.h);
+}
+
+function drawText(element, style, scale) {
+   setBlinkStyle(element, style, scale);
+
    let offset = 0
-   if (action.h_center) {
-      offset = -ctx.measureText(action.value).width / 2
+   if (element.h_center) {
+      offset = -ctx.measureText(element.value).width / 2
    }
-   ctx.fillText(action.value, action.pos.x * scale + offset, action.pos.y * scale)
+   ctx.fillText(element.value, element.pos.x * scale + offset, element.pos.y * scale)
 }

@@ -42,7 +42,7 @@
       return depthMap;
    }
 
-   function convertToWDMN(originalMountain) {
+   function convertToWDMN(originalMountain, recursive) {
       if (!Array.isArray(originalMountain)) return originalMountain;
       const depthMap = calcAncestorDepths(originalMountain);
       const wdmnMountain = JSON.parse(JSON.stringify(originalMountain));
@@ -107,15 +107,30 @@
       id: 't-omega-dmn',
       name: 'TωDMN',
       display: expr => '' + expr === 'Infinity' ? 'Limit' : wmn().display(convertToWDMN(expr)),
-      display_alter: expr => '' + expr === 'Infinity' ? 'Limit' : wmn().display_alter(convertToWDMN(expr)),
+      display_alter: expr => '' + expr === 'Infinity' ? 'Limit' : wmn().display_alter(convertToWDMN(expr), true),
       fromDisplay: str => str === 'Limit' ? Infinity : convertFromWDMN(wmn().fromDisplay(str)),
-      fromDisplay_alter: str => str === 'Limit' ? Infinity : convertFromWDMN(wmn().fromDisplay_alter(str)),
+      fromDisplay_alter: str => str === 'Limit' ? Infinity : convertFromWDMN(wmn().fromDisplay_alter(str), true),
       able: (a) => wmn().able(a),
       compare: (a, b) => wmn().compare(a, b),
       FS: (m, FSterm) => wmn().FS(m, FSterm),
       FSalter: (m, FSterm) => wmn().FSalter(m, FSterm),
       FSShort: (m, FSterm) => wmn().FSShort(m, FSterm),
       init: () => wmn().init()
+   })
+   register.push({
+      id:'t-omega-dmn-simple',
+      name:'TωDMN (Simple)',
+      display: expr => '' + expr === 'Infinity' ? 'Limit' : wmn().display_alter(convertToWDMN(expr), true),
+      fromDisplay: str => str === 'Limit' ? Infinity : convertFromWDMN(wmn().fromDisplay_alter(str, true)),
+      able: (a) => wmn().able(a),
+      compare: (a, b) => wmn().compare(a, b),
+      FS: (m, FSterm) => wmn().FS(m, FSterm),
+      FSalter: (m, FSterm) => wmn().FSalter(m, FSterm),
+      FSShort: (m, FSterm) => wmn().FSShort(m, FSterm),
+      init:()=>([
+         {expr:[[], [[1, [[], [[1, [[]]]], [[1, [[]]]], [[1, [[]]]]]]]],low:[[]],subitems:[]}
+         ,{expr:[],low:[[]],subitems:[]}
+      ])
    })
    analysis_register.push({
       id:'t-omega-mn',

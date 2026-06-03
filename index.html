@@ -5,9 +5,10 @@
 <link rel="stylesheet" type="text/css" href="index.css">
 <meta charset="UTF-8">
 <meta name="author" content="hyp_cos">
-</head><body><script src="Vue.js"></script>
-<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
-<script>var register=[]; var analysis_register=[]; </script>
+</head><body>
+<script src="Vue.js"></script>
+<script src="xlsx.full.min.js"></script>
+<script>const register=[]; const analysis_register=[]; </script>
 <div id="app">
    <div class="tab">
       <button v-for="(tab,idx) in tab_names" @mousedown="current_tab=idx" :disabled="current_tab==idx">{{tab}}</button>
@@ -22,10 +23,11 @@
    <div>
       <input type="checkbox" value="false" v-model="diagram_follow"/> Diagram follows
       <input type="range" min="-5" max="5" step="0.1" v-model="diagram_scale"
-             @focus="showCanvas = true" @blur="showCanvas = false"
+             @focus="hasCanvas = true" @blur="hasCanvas = false"
       > Diagram size: {{diagram_scale}}
       <br>
-      <input type="checkbox" value="true" v-model="use_alternative"/> Use alternative (short) fundamental sequence <br>
+      <input type="checkbox" value="true" v-model="use_alternative"/>
+      Use alternative (short) fundamental sequence <br>
    </div>
    <div>
       Navigate to notation: <input type="text" ref="navigate_input" @keydown="navigate_keydown"> <button @mousedown="(e) => {e.preventDefault(); find_notation()}"> Find </button>
@@ -45,10 +47,16 @@
          <option disabled :value="-1"/>
          <option v-for="(name, idx) in analysis_names" :value="idx">{{ name }}</option>
       </select>
+      <input type="checkbox" value="false" v-model="show_input"/> Show analysis textbox
    </div>
    <component :is="current_notation_name" :subitems="datasets[current_tab].subitems" ref="list"></component>
-   <div class="floating-canvas" id="floatingCanvas" :style="{ left: pCanvas.x + 'px', top: pCanvas.y + 'px' }" v-show="showCanvas && !pCanvasModifier.hide">
-      <canvas id="hoverCanvas" width="10" height="10" :style="{ width: pCanvasScaled.w + 'px', height: pCanvasScaled.h + 'px' }"/>
+   <div class="floating-canvas" id="floatingCanvas" :style="{ left: pCanvas.x + 'px', top: pCanvas.y + 'px' }"
+        v-show="showCanvas && !pCanvasModifier.hide"
+        @click.stop @mousemove.stop @mousedown.stop @mouseup.stop
+   >
+      <canvas id="hoverCanvas" width="10" height="10" :style="{ width: pCanvasScaled.w + 'px', height: pCanvasScaled.h + 'px' }"
+              @mousedown="canvas_on_mousedown" @click="canvas_on_click" @mousemove="canvas_on_mousemove"
+      />
    </div>
    <fs-dialog v-model="show_fs_dialog" :init="current_analysis_notation.fs_default" @confirm="calc_analysis_fs"/>
 </div>
@@ -67,6 +75,8 @@
 <script src="MTomegaMN.js"></script>
 <script src="Domega2MN.js"></script>
 <script src="Aomega2MN.js"></script>
+<script src="WAomega2MN.js"></script>
+<script src="WAomega2DMN.js"></script>
 <script src="Tomega^omegaMN.js"></script>
 <script src="DEN.js"></script>
 <script src="DEN2.js"></script>
