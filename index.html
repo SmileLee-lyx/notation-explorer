@@ -48,6 +48,7 @@
          <option v-for="(name, idx) in analysis_names" :value="idx">{{ name }}</option>
       </select>
       <input type="checkbox" value="false" v-model="show_input"/> Show analysis textbox
+      <input type="range" min="0" max="5" step="0.1" v-model="analysis_width"> Analysis width: {{analysis_width}}
    </div>
    <component :is="current_notation_name" :subitems="datasets[current_tab].subitems" ref="list"></component>
    <div class="floating-canvas" id="floatingCanvas" :style="{ left: pCanvas.x + 'px', top: pCanvas.y + 'px' }"
@@ -64,11 +65,14 @@
 <script src="omega-Y-magma.js"></script>
 <script src="1-Y.js"></script>
 <script src="BM.js"></script>
+<script src="TBM.js"></script>
 <script src="BHM.js"></script>
 <script src="BSM.js"></script>
 <script src="BLM.js"></script>
 <script src="CM.js"></script>
 <script src="wMM.js"></script>
+<script src="omegaMN.js"></script>
+<script src="non-triagular-cMN.js"></script>
 <script src="TomegaMN.js"></script>
 <script src="TomegaDMN.js"></script>
 <script src="Domega2MN.js"></script>
@@ -76,6 +80,8 @@
 <script src="WAomega2MN.js"></script>
 <script src="WAomega2DMN.js"></script>
 <script src="Fomega2MN.js"></script>
+<script src="WFomega2MN.js"></script>
+<script src="WFomega2DMN.js"></script>
 <script src="Tomega^omegaMN.js"></script>
 <script src="DEN.js"></script>
 <script src="DEN2.js"></script>

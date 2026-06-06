@@ -40,6 +40,7 @@ const app = Vue.createApp({
       diagramControlData:undefined,
 
       show_input:true,
+      analysis_width:1.0,
       diagram_follow:false,
       diagram_scale:0,
       use_alternative:true,
@@ -92,9 +93,12 @@ Ctrl + E: expand analysis fundamental sequence
                find_result(child)
             }
 
-            let text = node.analysis
-            if (text !== undefined) {
-               result.push([register[root.current_tab].display(node.expr), text])
+            let analysis = node.analysis
+            let remarks = node.remarks
+            if (analysis !== undefined || (remarks !== undefined && remarks.length > 0)) {
+               let row = [register[root.current_tab].display(node.expr), analysis || ""];
+               if (remarks !== undefined) row.push(...remarks);
+               result.push(row)
             }
          }
 
@@ -138,7 +142,8 @@ Ctrl + E: expand analysis fundamental sequence
                   if (!analysis.length) continue
                   let expr = safeFromDisplay(notation, expr_str)
                   if (expr === undefined) continue
-                  objects.push([expr, analysis]);
+                  let remarks = row.length > 2 ? row.slice(2) : undefined;
+                  objects.push({ expr, analysis, remarks });
                }
             }
 
@@ -159,7 +164,7 @@ Ctrl + E: expand analysis fundamental sequence
             expr = safeFromDisplay(notation, displayed_expr)
          }
          if (expr === undefined) return 0;
-         return import_analysis(this.datasets[this.current_tab], [[expr]], notation, this.use_alternative, true)
+         return import_analysis(this.datasets[this.current_tab], [{ expr }], notation, this.use_alternative, true)
       },
       navigate_keydown(event) {
          if (event.key === 'Enter') {
@@ -322,7 +327,7 @@ function import_analysis(root_item, analysis_list, notation, use_short, auto_foc
 
    while (index < analysis_list.length) {
       let flag = false
-      while ((cmp = notation.compare(item.expr, analysis_list[index][0])) !== 0) {
+      while ((cmp = notation.compare(item.expr, analysis_list[index].expr)) !== 0) {
          if (cmp > 0) {
             if (item.mark > root.length_limit) return index
             expand_item(item, notation, use_short, 0)
@@ -332,7 +337,8 @@ function import_analysis(root_item, analysis_list, notation, use_short, auto_foc
          }
       }
 
-      if (analysis_list[index][1] !== undefined) item.analysis = analysis_list[index][1]
+      if (item.analysis === undefined) item.analysis = analysis_list[index].analysis
+      if (item.remarks === undefined) item.remarks = analysis_list[index].remarks
 
       if (index === 0 && auto_focus) {
          let node = node_map.get(item.path)
@@ -616,7 +622,7 @@ register.forEach((notation,index)=>{
          onblur(event){
             root.hasCanvas = false
          },
-         onkeydown(event) {
+         onkeydown(event, k) {
             if (event.ctrlKey || event.altKey) {
                let useDefault = false
                if (event.ctrlKey && ['c', 'v', 'a', 'x'].includes(event.key.toLowerCase())) {
@@ -654,6 +660,18 @@ register.forEach((notation,index)=>{
             } else if (event.key === 'Delete') {
                event.preventDefault()
                delete this.item.analysis
+            } else if (event.key === 'Tab') {
+               event.preventDefault()
+               let target_index = (k ?? -1) + 1;
+               if (target_index === this.item.remarks.length) {
+                  this.$refs.input.focus()
+               } else {
+                  this.$refs['remark' + target_index][0].focus()
+               }
+            } else if (event.key === '=' && event.ctrlKey) {
+               this.add_remark()
+            } else if (event.key === '-' && event.ctrlKey) {
+               this.delete_remark()
             } else if (event.key.toLowerCase() === 's' && event.ctrlKey) {
                root.export_xlsx()
             } else if (event.key.toLowerCase() === 'h' && event.ctrlKey) {
@@ -677,9 +695,20 @@ register.forEach((notation,index)=>{
                event.preventDefault()
             }
          },
+         add_remark() {
+            if (this.item.remarks === undefined) this.item.remarks = []
+            this.item.remarks.push("")
+         },
+         delete_remark() {
+            if (this.item.remarks === undefined) this.item.remarks = []
+            if (this.item.remarks.length > 0) this.item.remarks.pop()
+         }
       },
       computed: {
          show_input() { return this.$root.show_input },
+         input_style() {
+            return { width: (200 * this.$root.analysis_width) + 'px'}
+         }
       },
       mounted() {
          node_map.set(this.item.path, this)
@@ -694,7 +723,19 @@ register.forEach((notation,index)=>{
       },
       template:`<li><div class="shown-item" :class="{analyzed: item.analysis !== undefined}" @mouseenter="onmouseenter" @mousemove="onmousemove" @mouseleave="onmouseleave" @mousedown="onmousedown">
             <input type="checkbox" v-model="item.hide_child" @mousedown.stop>
-            <input type="text" v-show="show_input" @mousedown.stop @keydown.stop="onkeydown" ref="input" @focus="onfocus" @blur="onblur" v-model="item.analysis"/>
+            <span v-show="show_input">
+               <input type="text" :style="input_style"
+                      @mousedown.stop @keydown.stop="onkeydown" ref="input" @focus="onfocus" @blur="onblur" 
+                      v-model="item.analysis"/>
+               <input v-for="k in item.remarks?.length ?? 0"
+                      type="text"
+                      @mousedown.stop @keydown.stop="(e) => onkeydown(e, k-1)" :ref="'remark' + (k-1)" @focus="onfocus" @blur="onblur" 
+                      v-model="item.remarks[k-1]"/>
+               <button @mousedown.stop="add_remark"
+               >+</button>
+               <button @mousedown.stop="delete_remark"
+               >-</button>
+            </span>
             <span v-html="notation.display(item.expr)"></span>
             <div class="tooltip" v-if="tooltip" :style="tooltipX" @mousedown.stop>
             <span v-html="notation.display(item.expr)"></span> fundamental sequence:
@@ -718,14 +759,7 @@ app.component('fs-dialog', {
     <div v-if="modelValue" class="fs-dialog-overlay" @click.self="handleCancel">
       <div class="fs-dialog-container">
         <h3 class="fs-dialog-title">input fs index</h3>
-        <input
-          ref="inputRef"
-          type="number"
-          v-model.number="inputValue"
-          step="1"
-          class="fs-dialog-input"
-          @keyup.enter="handleConfirm"
-        >
+        <input ref="inputRef" type="number" v-model.number="inputValue" step="1" class="fs-dialog-input" @keyup.enter="handleConfirm">
         <div class="fs-dialog-buttons">
           <button @click="handleCancel" class="fs-dialog-btn">cancel</button>
           <button @click="handleConfirm" class="fs-dialog-btn fs-dialog-btn-primary">confirm</button>
